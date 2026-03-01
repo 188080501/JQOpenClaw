@@ -22,7 +22,8 @@
 #include "crypto/secretbox/secretboxcrypto.h"
 #include "crypto/signing/deviceauth.h"
 
-namespace {
+namespace
+{
 QString extractString(const QJsonObject &object, const QString &key)
 {
     const QJsonValue value = object.value(key);

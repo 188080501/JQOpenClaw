@@ -6,7 +6,8 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-namespace {
+namespace
+{
 constexpr int secretBoxKeyBytes = 32;
 constexpr int secretBoxNonceBytes = 12;
 constexpr int secretBoxTagBytes = 16;

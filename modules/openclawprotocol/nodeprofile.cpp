@@ -4,7 +4,8 @@
 // Qt lib import
 #include <QSet>
 
-namespace {
+namespace
+{
 struct CapabilityDeclaration
 {
     const char *capabilityCategory;

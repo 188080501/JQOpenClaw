@@ -22,7 +22,8 @@
 #include "openclawprotocol/nodeoptions.h"
 #include "openclawprotocol/nodeprofile.h"
 
-namespace {
+namespace
+{
 
 bool checkSingletonFlag(const QString &flag)
 {

@@ -10,7 +10,8 @@
 #include <QScreen>
 #include <QtGlobal>
 
-namespace {
+namespace
+{
 bool captureScreenToJpg(
     QScreen *screen,
     QByteArray *jpgBytes,
@@ -127,7 +128,7 @@ bool SystemScreenshot::captureAllToJpg(QList<CaptureResult> *results, QString *e
 
     results->clear();
 
-    const QList<QScreen *> screens = QGuiApplication::screens();
+    const QList< QScreen * > screens = QGuiApplication::screens();
     if ( screens.isEmpty() )
     {
         if ( error != nullptr )

@@ -16,7 +16,8 @@
 #include <QThread>
 #include <QtGlobal>
 
-namespace {
+namespace
+{
 QString runWmicRaw(const QStringList &arguments)
 {
     QProcess process;

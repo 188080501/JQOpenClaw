@@ -9,7 +9,8 @@
 // JQOpenClaw import
 #include "crypto/cryptoencoding.h"
 
-namespace {
+namespace
+{
 QString lastOpenSslError()
 {
     const unsigned long errorCode = ERR_get_error();

@@ -1,7 +1,8 @@
 // .h include
 #include "crypto/cryptoencoding.h"
 
-namespace {
+namespace
+{
 QString toLowerAscii(const QString &value)
 {
     QString out = value;

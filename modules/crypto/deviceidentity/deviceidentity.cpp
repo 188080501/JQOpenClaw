@@ -21,7 +21,8 @@
 #include "crypto/cryptoencoding.h"
 #include "crypto/signing/deviceauth.h"
 
-namespace {
+namespace
+{
 QString defaultIdentityPath()
 {
     QString basePath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);

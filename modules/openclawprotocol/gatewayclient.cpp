@@ -17,7 +17,8 @@
 // JQOpenClaw import
 #include "crypto/cryptoencoding.h"
 
-namespace {
+namespace
+{
 QString extractString(const QJsonObject &object, const QString &key)
 {
     const QJsonValue value = object.value(key);
