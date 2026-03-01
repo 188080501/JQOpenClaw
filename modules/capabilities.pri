@@ -1,7 +1,7 @@
 HEADERS *= \
-    $$PWD/capabilities/screenshot/screenshotcapture.h \
-    $$PWD/capabilities/systemresource/systemresourceinfo.h
+    $$PWD/capabilities/system/systemscreenshot.h \
+    $$PWD/capabilities/system/systeminfo.h
 
 SOURCES *= \
-    $$PWD/capabilities/screenshot/screenshotcapture.cpp \
-    $$PWD/capabilities/systemresource/systemresourceinfo.cpp
+    $$PWD/capabilities/system/systemscreenshot.cpp \
+    $$PWD/capabilities/system/systeminfo.cpp

@@ -7,15 +7,15 @@
 namespace {
 struct CapabilityDeclaration
 {
-    const char *cap;
+    const char *capabilityCategory;
     const char *command;
-    const char *permission;
+    bool permissionGranted;
 };
 
 const CapabilityDeclaration capabilityDeclarations[] =
 {
-    {"screenshot", "screenshot.capture", "screenshot.capture"},
-    {"system.resource", "system.resource.info", "system.resource.info"},
+    {"system", "system.screenshot", true},
+    {"system", "system.info", true},
 };
 }
 
@@ -45,13 +45,14 @@ QJsonArray NodeProfile::caps()
     QJsonArray out;
     for ( const auto &declaration : capabilityDeclarations )
     {
-        const QString cap = QString::fromLatin1(declaration.cap);
-        if ( inserted.contains(cap) )
+        const QString capabilityCategory =
+            QString::fromLatin1(declaration.capabilityCategory);
+        if ( inserted.contains(capabilityCategory) )
         {
             continue;
         }
-        inserted.insert(cap);
-        out.append(cap);
+        inserted.insert(capabilityCategory);
+        out.append(capabilityCategory);
     }
     return out;
 }
@@ -71,7 +72,10 @@ QJsonObject NodeProfile::permissions()
     QJsonObject out;
     for ( const auto &declaration : capabilityDeclarations )
     {
-        out.insert(QString::fromLatin1(declaration.permission), true);
+        out.insert(
+            QString::fromLatin1(declaration.command),
+            declaration.permissionGranted
+        );
     }
     return out;
 }

@@ -1,5 +1,5 @@
-﻿// .h include
-#include "capabilities/screenshot/screenshotcapture.h"
+// .h include
+#include "capabilities/system/systemscreenshot.h"
 
 // Qt lib import
 #include <QBuffer>
@@ -10,16 +10,16 @@
 #include <QScreen>
 #include <QtGlobal>
 
-bool ScreenshotCapture::captureToJpg(QByteArray *jpgBytes, QSize *scaledSize, QString *error)
+bool SystemScreenshot::captureToJpg(QByteArray *jpgBytes, QSize *scaledSize, QString *error)
 {
-    qInfo().noquote() << QStringLiteral("[capability.screenshot] capture start");
+    qInfo().noquote() << QStringLiteral("[capability.system.screenshot] capture start");
     if ( jpgBytes == nullptr )
     {
         if ( error != nullptr )
         {
             *error = QStringLiteral("screenshot output bytes pointer is null");
         }
-        qWarning().noquote() << QStringLiteral("[capability.screenshot] capture failed: screenshot output bytes pointer is null");
+        qWarning().noquote() << QStringLiteral("[capability.system.screenshot] capture failed: screenshot output bytes pointer is null");
         return false;
     }
 
@@ -30,7 +30,7 @@ bool ScreenshotCapture::captureToJpg(QByteArray *jpgBytes, QSize *scaledSize, QS
         {
             *error = QStringLiteral("primary screen is unavailable");
         }
-        qWarning().noquote() << QStringLiteral("[capability.screenshot] capture failed: primary screen is unavailable");
+        qWarning().noquote() << QStringLiteral("[capability.system.screenshot] capture failed: primary screen is unavailable");
         return false;
     }
 
@@ -41,7 +41,7 @@ bool ScreenshotCapture::captureToJpg(QByteArray *jpgBytes, QSize *scaledSize, QS
         {
             *error = QStringLiteral("failed to capture screen");
         }
-        qWarning().noquote() << QStringLiteral("[capability.screenshot] capture failed: failed to capture screen");
+        qWarning().noquote() << QStringLiteral("[capability.system.screenshot] capture failed: failed to capture screen");
         return false;
     }
 
@@ -55,7 +55,7 @@ bool ScreenshotCapture::captureToJpg(QByteArray *jpgBytes, QSize *scaledSize, QS
         {
             *error = QStringLiteral("failed to open screenshot memory buffer");
         }
-        qWarning().noquote() << QStringLiteral("[capability.screenshot] capture failed: failed to open screenshot memory buffer");
+        qWarning().noquote() << QStringLiteral("[capability.system.screenshot] capture failed: failed to open screenshot memory buffer");
         return false;
     }
 
@@ -65,7 +65,7 @@ bool ScreenshotCapture::captureToJpg(QByteArray *jpgBytes, QSize *scaledSize, QS
         {
             *error = QStringLiteral("failed to encode screenshot as jpg");
         }
-        qWarning().noquote() << QStringLiteral("[capability.screenshot] capture failed: failed to encode screenshot as jpg");
+        qWarning().noquote() << QStringLiteral("[capability.system.screenshot] capture failed: failed to encode screenshot as jpg");
         return false;
     }
 
@@ -74,9 +74,10 @@ bool ScreenshotCapture::captureToJpg(QByteArray *jpgBytes, QSize *scaledSize, QS
     {
         *scaledSize = image.size();
     }
-    qInfo().noquote() << QStringLiteral("[capability.screenshot] capture done size=%1x%2 bytes=%3")
+    qInfo().noquote() << QStringLiteral("[capability.system.screenshot] capture done size=%1x%2 bytes=%3")
                              .arg(image.width())
                              .arg(image.height())
                              .arg(jpgBytes->size());
     return true;
 }
+

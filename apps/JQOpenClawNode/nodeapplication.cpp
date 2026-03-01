@@ -1,4 +1,4 @@
-﻿// .h include
+// .h include
 #include "nodeapplication.h"
 
 // Qt lib import
@@ -17,8 +17,8 @@
 #include <QUrl>
 
 // JQOpenClaw import
-#include "capabilities/screenshot/screenshotcapture.h"
-#include "capabilities/systemresource/systemresourceinfo.h"
+#include "capabilities/system/systemscreenshot.h"
+#include "capabilities/system/systeminfo.h"
 #include "crypto/secretbox/secretboxcrypto.h"
 #include "crypto/signing/deviceauth.h"
 
@@ -570,21 +570,21 @@ bool NodeApplication::executeInvokeCommand(
         return false;
     }
 
-    if ( command == QStringLiteral("system.resource.info") )
+    if ( command == QStringLiteral("system.info") )
     {
         Q_UNUSED(params);
         QJsonObject info;
         QString collectError;
-        if ( !SystemResourceInfo::collect(&info, &collectError) )
+        if ( !SystemInfo::collect(&info, &collectError) )
         {
             if ( errorCode != nullptr )
             {
-                *errorCode = QStringLiteral("SYSTEM_RESOURCE_FAILED");
+                *errorCode = QStringLiteral("SYSTEM_INFO_FAILED");
             }
             if ( errorMessage != nullptr )
             {
                 *errorMessage = collectError.isEmpty()
-                    ? QStringLiteral("failed to collect system resource info")
+                    ? QStringLiteral("failed to collect system info")
                     : collectError;
             }
             return false;
@@ -593,13 +593,13 @@ bool NodeApplication::executeInvokeCommand(
         return true;
     }
 
-    if ( command == QStringLiteral("screenshot.capture") )
+    if ( command == QStringLiteral("system.screenshot") )
     {
         Q_UNUSED(params);
         QByteArray imageBytes;
         QSize scaledSize;
         QString captureError;
-        if ( !ScreenshotCapture::captureToJpg(&imageBytes, &scaledSize, &captureError) )
+        if ( !SystemScreenshot::captureToJpg(&imageBytes, &scaledSize, &captureError) )
         {
             if ( errorCode != nullptr )
             {
@@ -649,7 +649,7 @@ bool NodeApplication::executeInvokeCommand(
             }
             return false;
         }
-        qInfo().noquote() << QStringLiteral("[capability.screenshot] upload done url=%1").arg(fileUrl);
+        qInfo().noquote() << QStringLiteral("[capability.system.screenshot] upload done url=%1").arg(fileUrl);
 
         QJsonObject result;
         result.insert(QStringLiteral("format"), QStringLiteral("jpg"));
@@ -747,3 +747,4 @@ QString NodeApplication::parseErrorMessage(const QJsonObject &errorObject)
     }
     return QStringLiteral("unknown connect error");
 }
+
