@@ -126,6 +126,13 @@ QList<QMap<QString, QString>> runWmicValueRecords(const QStringList &arguments)
     return parseWmicValueRecords(rawOutput);
 }
 
+QStringList sortedValues(const QSet<QString> &values)
+{
+    QStringList sorted = values.values();
+    sorted.sort(Qt::CaseInsensitive);
+    return sorted;
+}
+
 double roundGb(double value)
 {
     if ( value < 0.0 )
@@ -393,7 +400,8 @@ QJsonArray readGpuNames()
     }
 
     QJsonArray gpus;
-    for ( const QString &name : uniqueNames )
+    const QStringList sortedNames = sortedValues(uniqueNames);
+    for ( const QString &name : sortedNames )
     {
         gpus.append(name);
     }
@@ -455,13 +463,15 @@ QJsonObject readIpInfo()
     }
 
     QJsonArray ipv4;
-    for ( const QString &ip : ipv4Set )
+    const QStringList sortedIpv4 = sortedValues(ipv4Set);
+    for ( const QString &ip : sortedIpv4 )
     {
         ipv4.append(ip);
     }
 
     QJsonArray ipv6;
-    for ( const QString &ip : ipv6Set )
+    const QStringList sortedIpv6 = sortedValues(ipv6Set);
+    for ( const QString &ip : sortedIpv6 )
     {
         ipv6.append(ip);
     }
