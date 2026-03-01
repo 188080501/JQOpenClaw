@@ -47,7 +47,7 @@ bool captureScreenToJpg(
         return false;
     }
 
-    QImage image = pixmap.toImage().scaledToWidth(1080, Qt::SmoothTransformation);
+    QImage image = pixmap.toImage();
 
     QByteArray encodedJpg;
     QBuffer buffer(&encodedJpg);
