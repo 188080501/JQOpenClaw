@@ -141,6 +141,6 @@ JQOpenClaw/
 - `apps/JQOpenClawNode`：当前 Node 应用入口与生命周期编排代码。
 - `modules`：业务源码与 qmake 工程片段（`capabilities.pri`/`openclawprotocol.pri`/`crypto.pri`，其中 `crypto.pri` 引入 `openssl.pri`）。
 - `modules/openclawprotocol`：OpenClaw 协议相关代码（Gateway WebSocket、Node 生命周期与请求分发）。
-- `modules/capabilities/*`：截图（当前输出 JPG，480x320，`Qt::KeepAspectRatioByExpanding`）与系统资源信息（CPU、GPU、硬盘、内存；当前已实现 CPU 名称、计算机名）等能力实现。
+- `modules/capabilities/*`：截图、系统资源信息（CPU、GPU、硬盘、内存；当前已实现 CPU 名称、计算机名）等能力实现。
 - `modules/crypto/*`：设备身份、签名、编码相关实现。
 - `docs`：协议笔记、联调记录与设计文档。
