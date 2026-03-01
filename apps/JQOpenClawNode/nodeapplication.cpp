@@ -1,4 +1,4 @@
-// .h include
+﻿// .h include
 #include "nodeapplication.h"
 
 // Qt lib import
@@ -134,7 +134,7 @@ QUrl buildFileServerUrl(
 
 QString generateScreenshotFileName()
 {
-    const QString timestamp = QDateTime::currentDateTimeUtc().toString("yyyyMMddHHmmsszzz");
+    const QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmsszzz");
     const QString randomId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     return QStringLiteral("screenshot-%1-%2.jpg").arg(timestamp, randomId);
 }
@@ -596,10 +596,9 @@ bool NodeApplication::executeInvokeCommand(
     if ( command == QStringLiteral("system.screenshot") )
     {
         Q_UNUSED(params);
-        QByteArray imageBytes;
-        QSize scaledSize;
+        QList<SystemScreenshot::CaptureResult> captures;
         QString captureError;
-        if ( !SystemScreenshot::captureToJpg(&imageBytes, &scaledSize, &captureError) )
+        if ( !SystemScreenshot::captureAllToJpg(&captures, &captureError) )
         {
             if ( errorCode != nullptr )
             {
@@ -614,50 +613,65 @@ bool NodeApplication::executeInvokeCommand(
             return false;
         }
 
-        if ( imageBytes.isEmpty() )
+        QJsonArray resultArray;
+        for ( int index = 0; index < captures.size(); ++index )
         {
-            if ( errorCode != nullptr )
+            const SystemScreenshot::CaptureResult &captureResult = captures.at(index);
+            if ( captureResult.jpgBytes.isEmpty() )
             {
-                *errorCode = QStringLiteral("SCREENSHOT_CAPTURE_FAILED");
+                qWarning().noquote() << QStringLiteral(
+                    "[capability.system.screenshot] upload screen skipped index=%1 reason=empty image bytes"
+                ).arg(captureResult.screenIndex);
+                continue;
             }
-            if ( errorMessage != nullptr )
+
+            QString fileUrl;
+            QString uploadError;
+            if ( !uploadScreenshotFile(
+                    captureResult.jpgBytes,
+                    options_.fileServerUri,
+                    options_.fileServerToken,
+                    &fileUrl,
+                    &uploadError
+                ) )
             {
-                *errorMessage = QStringLiteral("captured screenshot bytes are empty");
+                qWarning().noquote() << QStringLiteral(
+                    "[capability.system.screenshot] upload screen skipped index=%1 reason=%2"
+                ).arg( QString::number( captureResult.screenIndex ), uploadError );
+                continue;
             }
-            return false;
+            qInfo().noquote() << QStringLiteral(
+                "[capability.system.screenshot] upload done index=%1 url=%2"
+            ).arg( QString::number( captureResult.screenIndex ), fileUrl );
+
+            QJsonObject result;
+            result.insert(QStringLiteral("format"), QStringLiteral("jpg"));
+            result.insert(QStringLiteral("mimeType"), QStringLiteral("image/jpeg"));
+            result.insert(QStringLiteral("url"), fileUrl);
+            result.insert(QStringLiteral("width"), captureResult.scaledSize.width());
+            result.insert(QStringLiteral("height"), captureResult.scaledSize.height());
+            result.insert(QStringLiteral("screenIndex"), captureResult.screenIndex);
+            if ( !captureResult.screenName.trimmed().isEmpty() )
+            {
+                result.insert(QStringLiteral("screenName"), captureResult.screenName);
+            }
+            resultArray.append(result);
         }
 
-        QString fileUrl;
-        QString uploadError;
-        if ( !uploadScreenshotFile(
-                imageBytes,
-                options_.fileServerUri,
-                options_.fileServerToken,
-                &fileUrl,
-                &uploadError
-            ) )
-            {
+        if ( resultArray.isEmpty() )
+        {
             if ( errorCode != nullptr )
             {
                 *errorCode = QStringLiteral("SCREENSHOT_UPLOAD_FAILED");
             }
             if ( errorMessage != nullptr )
             {
-                *errorMessage = uploadError.isEmpty()
-                    ? QStringLiteral("failed to upload screenshot")
-                    : uploadError;
+                *errorMessage = QStringLiteral("failed to upload screenshots for all screens");
             }
             return false;
         }
-        qInfo().noquote() << QStringLiteral("[capability.system.screenshot] upload done url=%1").arg(fileUrl);
 
-        QJsonObject result;
-        result.insert(QStringLiteral("format"), QStringLiteral("jpg"));
-        result.insert(QStringLiteral("mimeType"), QStringLiteral("image/jpeg"));
-        result.insert(QStringLiteral("url"), fileUrl);
-        result.insert(QStringLiteral("width"), scaledSize.width());
-        result.insert(QStringLiteral("height"), scaledSize.height());
-        *payload = result;
+        *payload = resultArray;
         return true;
     }
 

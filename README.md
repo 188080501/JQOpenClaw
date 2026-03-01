@@ -14,7 +14,7 @@
 | 能力分类 | 命令 | 能力说明 |
 | --- | --- | --- |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
-| `system` | `system.info` | 采集系统基础信息（如 CPU 名称、计算机名称）。 |
+| `system` | `system.info` | 采集系统基础信息（CPU名称+核心/线程、计算机名、内存、GPU、IP、硬盘容量）。 |
 
 ## 运行参数
 
