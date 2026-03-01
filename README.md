@@ -13,6 +13,7 @@
 
 | 能力分类 | 命令 | 能力说明 |
 | --- | --- | --- |
+| `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 exitCode/stdout/stderr 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
 | `system` | `system.info` | 采集系统基础信息（CPU名称+核心/线程、计算机名、内存、GPU、IP、硬盘容量）。 |
 
@@ -54,6 +55,7 @@
 JQOpenClaw
 ├─ apps/JQOpenClawNode/          # Node 应用入口与命令分发
 ├─ modules/openclawprotocol/     # 网关握手与 caps/commands/permissions 声明
+├─ modules/capabilities/process/ # process 能力实现（process.exec）
 ├─ modules/capabilities/system/  # system 能力实现（system.screenshot / system.info）
 ├─ modules/crypto/               # 设备身份、签名与加解密相关能力
 └─ docs/                         # 项目依赖与部署文档

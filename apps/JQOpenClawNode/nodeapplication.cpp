@@ -17,6 +17,7 @@
 #include <QUrl>
 
 // JQOpenClaw import
+#include "capabilities/process/processexec.h"
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
 #include "crypto/secretbox/secretboxcrypto.h"
@@ -673,6 +674,29 @@ bool NodeApplication::executeInvokeCommand(
         }
 
         *payload = resultArray;
+        return true;
+    }
+
+    if ( command == QStringLiteral("process.exec") )
+    {
+        QJsonObject executeResult;
+        QString executeError;
+        if ( !ProcessExec::execute(params, &executeResult, &executeError) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = QStringLiteral("PROCESS_EXEC_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = executeError.isEmpty()
+                    ? QStringLiteral("failed to execute process")
+                    : executeError;
+            }
+            return false;
+        }
+
+        *payload = executeResult;
         return true;
     }
 

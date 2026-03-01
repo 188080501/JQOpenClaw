@@ -15,6 +15,7 @@ struct CapabilityDeclaration
 
 const CapabilityDeclaration capabilityDeclarations[] =
 {
+    {"process", "process.exec", true},
     {"system", "system.screenshot", true},
     {"system", "system.info", true},
 };
