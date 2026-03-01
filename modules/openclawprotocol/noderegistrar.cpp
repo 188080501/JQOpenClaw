@@ -70,7 +70,7 @@ bool NodeRegistrar::buildConnectParams(
             &signature,
             &signatureError
         ) )
-        {
+    {
         if ( error != nullptr )
         {
             *error = signatureError;

@@ -66,7 +66,7 @@ QString runWmicSingleValue(const QStringList &arguments)
     for ( int i = lines.size() - 1; i >= 1; --i )
     {
         const QString value = lines.at(i).trimmed();
-        if ( !value.isEmpty() && value.compare(header, Qt::CaseInsensitive) != 0 )
+        if ( !value.isEmpty() && ( value.compare(header, Qt::CaseInsensitive) != 0 ) )
         {
             qInfo().noquote() << QStringLiteral("[capability.system.info] wmic parsed value=%1").arg(value);
             return value;
@@ -222,14 +222,14 @@ void readCpuCoreAndThreadCount(int *coreCount, int *threadCount)
     {
         bool coreOk = false;
         const int cores = record.value(QStringLiteral("NumberOfCores")).trimmed().toInt(&coreOk);
-        if ( coreOk && cores > 0 )
+        if ( coreOk && ( cores > 0 ) )
         {
             parsedCoreCount += cores;
         }
 
         bool threadOk = false;
         const int threads = record.value(QStringLiteral("NumberOfLogicalProcessors")).trimmed().toInt(&threadOk);
-        if ( threadOk && threads > 0 )
+        if ( threadOk && ( threads > 0 ) )
         {
             parsedThreadCount += threads;
         }
@@ -277,7 +277,7 @@ QJsonObject readMemoryInfo()
         const QString value = record.value(QStringLiteral("TotalPhysicalMemory")).trimmed();
         bool ok = false;
         const quint64 parsed = value.toULongLong(&ok);
-        if ( ok && parsed > 0 )
+        if ( ok && ( parsed > 0 ) )
         {
             totalPhysicalBytes = parsed;
             hasTotalPhysicalBytes = true;
@@ -304,7 +304,7 @@ QJsonObject readMemoryInfo()
             const QString totalVisible = record.value(QStringLiteral("TotalVisibleMemorySize")).trimmed();
             bool ok = false;
             const quint64 parsed = totalVisible.toULongLong(&ok);
-            if ( ok && parsed > 0 )
+            if ( ok && ( parsed > 0 ) )
             {
                 totalVisibleKib = parsed;
                 hasTotalVisibleKib = true;
@@ -316,7 +316,7 @@ QJsonObject readMemoryInfo()
             const QString freePhysical = record.value(QStringLiteral("FreePhysicalMemory")).trimmed();
             bool ok = false;
             const quint64 parsed = freePhysical.toULongLong(&ok);
-            if ( ok && parsed > 0 )
+            if ( ok && ( parsed > 0 ) )
             {
                 freePhysicalKib = parsed;
                 hasFreePhysicalKib = true;
@@ -333,7 +333,7 @@ QJsonObject readMemoryInfo()
         memory.insert(QStringLiteral("totalGB"), kibToGb(totalVisibleKib));
     }
 
-    if ( hasTotalVisibleKib && hasFreePhysicalKib && totalVisibleKib >= freePhysicalKib )
+    if ( hasTotalVisibleKib && hasFreePhysicalKib && ( totalVisibleKib >= freePhysicalKib ) )
     {
         memory.insert(QStringLiteral("usedGB"), kibToGb(totalVisibleKib - freePhysicalKib));
     }
@@ -411,9 +411,9 @@ QJsonObject readIpInfo()
     for ( const QNetworkInterface &interface : interfaces )
     {
         const QNetworkInterface::InterfaceFlags flags = interface.flags();
-        if ( !flags.testFlag(QNetworkInterface::IsUp)
-             || !flags.testFlag(QNetworkInterface::IsRunning)
-             || flags.testFlag(QNetworkInterface::IsLoopBack) )
+        if ( !flags.testFlag(QNetworkInterface::IsUp) ||
+             !flags.testFlag(QNetworkInterface::IsRunning) ||
+             flags.testFlag(QNetworkInterface::IsLoopBack) )
         {
             continue;
         }
@@ -437,8 +437,8 @@ QJsonObject readIpInfo()
                 continue;
             }
 
-            if ( address.protocol() == QAbstractSocket::IPv6Protocol
-                 && !address.isLinkLocal() )
+            if ( ( address.protocol() == QAbstractSocket::IPv6Protocol ) &&
+                 !address.isLinkLocal() )
             {
                 QString ip = address.toString().trimmed();
                 const int scopeIndex = ip.indexOf('%');
@@ -503,7 +503,7 @@ QJsonArray readDiskInfo()
 
         bool sizeOk = false;
         const quint64 sizeBytes = sizeText.toULongLong(&sizeOk);
-        if ( sizeOk && sizeBytes > 0 )
+        if ( sizeOk && ( sizeBytes > 0 ) )
         {
             disk.insert(QStringLiteral("capacityGB"), bytesToRoundedGbInt(sizeBytes));
         }

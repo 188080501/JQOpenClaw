@@ -27,8 +27,8 @@ QString extractString(const QJsonObject &object, const QString &key)
 
 bool shouldLogEvent(const QString &eventName)
 {
-    return eventName == QStringLiteral("connect.challenge")
-        || eventName == QStringLiteral("node.invoke.request");
+    return eventName == QStringLiteral("connect.challenge") ||
+        eventName == QStringLiteral("node.invoke.request");
 }
 }
 
@@ -66,9 +66,9 @@ void GatewayClient::open()
 
 void GatewayClient::close()
 {
-    if ( socket_.state() == QAbstractSocket::ConnectedState
-        || socket_.state() == QAbstractSocket::ConnectingState )
-        {
+    if ( ( socket_.state() == QAbstractSocket::ConnectedState ) ||
+         ( socket_.state() == QAbstractSocket::ConnectingState ) )
+    {
         socket_.close();
     }
 }
@@ -125,9 +125,9 @@ void GatewayClient::sendInvokeResult(const QJsonObject &params)
 
 void GatewayClient::onConnected()
 {
-    if ( options_.tls
-        && !options_.tlsFingerprint.trimmed().isEmpty() )
-        {
+    if ( options_.tls &&
+         !options_.tlsFingerprint.trimmed().isEmpty() )
+    {
         const QSslCertificate peerCertificate = socket_.sslConfiguration().peerCertificate();
         if ( peerCertificate.isNull() )
         {
@@ -182,9 +182,9 @@ void GatewayClient::onTextMessageReceived(const QString &message)
 {
     QJsonParseError parseError;
     const QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &parseError);
-    if ( parseError.error != QJsonParseError::NoError
-        || !doc.isObject() )
-        {
+    if ( ( parseError.error != QJsonParseError::NoError ) ||
+         !doc.isObject() )
+    {
         emit transportError(
             QStringLiteral("invalid gateway message: %1").arg(parseError.errorString())
         );
@@ -236,9 +236,9 @@ void GatewayClient::onTextMessageReceived(const QString &message)
     }
 
     const QString responseId = extractString(root, "id");
-    if ( pendingConnectRequestId_.isEmpty()
-        || responseId != pendingConnectRequestId_ )
-        {
+    if ( pendingConnectRequestId_.isEmpty() ||
+         ( responseId != pendingConnectRequestId_ ) )
+    {
         return;
     }
     pendingConnectRequestId_.clear();

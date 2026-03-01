@@ -9,9 +9,9 @@ QString toLowerAscii(const QString &value)
     for ( int index = 0; index < out.size(); ++index )
     {
         const QChar ch = out.at(index);
-        if ( ch >= QLatin1Char('A')
-            && ch <= QLatin1Char('Z') )
-            {
+        if ( ( ch >= QLatin1Char('A') ) &&
+             ( ch <= QLatin1Char('Z') ) )
+        {
             out[index] = QChar(ch.unicode() + 32);
         }
     }
@@ -20,12 +20,12 @@ QString toLowerAscii(const QString &value)
 
 bool isBase64UrlChar(const QChar ch)
 {
-    return (ch >= QLatin1Char('A') && ch <= QLatin1Char('Z'))
-           || (ch >= QLatin1Char('a') && ch <= QLatin1Char('z'))
-           || (ch >= QLatin1Char('0') && ch <= QLatin1Char('9'))
-           || ch == QLatin1Char('-')
-           || ch == QLatin1Char('_')
-           || ch == QLatin1Char('=');
+    return (ch >= QLatin1Char('A') && ch <= QLatin1Char('Z')) ||
+           (ch >= QLatin1Char('a') && ch <= QLatin1Char('z')) ||
+           (ch >= QLatin1Char('0') && ch <= QLatin1Char('9')) ||
+           ch == QLatin1Char('-') ||
+           ch == QLatin1Char('_') ||
+           ch == QLatin1Char('=');
 }
 
 bool hasOnlyBase64UrlChars(const QString &value)
@@ -97,9 +97,9 @@ bool CryptoEncoding::fromBase64Url(const QString &text, QByteArray *data)
     }
 
     const QByteArray decoded = QByteArray::fromBase64(normalized, QByteArray::Base64Encoding);
-    if ( decoded.isEmpty()
-        && !normalized.isEmpty() )
-        {
+    if ( decoded.isEmpty() &&
+         !normalized.isEmpty() )
+    {
         return false;
     }
 

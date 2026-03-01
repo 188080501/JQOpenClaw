@@ -173,9 +173,9 @@ bool DeviceAuth::signDetached(
     EVP_MD_CTX_free(mdCtx);
     EVP_PKEY_free(pkey);
 
-    if ( !signOk
-        || signatureLength != static_cast<size_t>(DeviceAuthConstants::ed25519SignatureBytes) )
-        {
+    if ( !signOk ||
+         ( signatureLength != static_cast<size_t>(DeviceAuthConstants::ed25519SignatureBytes) ) )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral(

@@ -66,9 +66,9 @@ bool applyConfigFromFile(const QString &path, NodeOptions *options, QString *err
 
     QJsonParseError parseError;
     const QJsonDocument json = QJsonDocument::fromJson(file.readAll(), &parseError);
-    if ( parseError.error != QJsonParseError::NoError
-        || !json.isObject() )
-        {
+    if ( ( parseError.error != QJsonParseError::NoError ) ||
+         !json.isObject() )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral("invalid config JSON: %1").arg(path);
@@ -87,11 +87,11 @@ bool applyConfigFromFile(const QString &path, NodeOptions *options, QString *err
             std::numeric_limits<double>::quiet_NaN()
         );
         const int port = static_cast<int>(rawPort);
-        if ( std::isfinite(rawPort)
-            && rawPort == static_cast<double>(port)
-            && port > 0
-            && port <= 65535 )
-            {
+        if ( std::isfinite(rawPort) &&
+             ( rawPort == static_cast<double>(port) ) &&
+             ( port > 0 ) &&
+             ( port <= 65535 ) )
+        {
             options->port = static_cast<quint16>(port);
         }
         else
@@ -256,10 +256,10 @@ int main(int argc, char *argv[])
     {
         bool ok = false;
         const int port = parser.value(portOption).toInt(&ok);
-        if ( ok
-            && port > 0
-            && port <= 65535 )
-            {
+        if ( ok &&
+             ( port > 0 ) &&
+             ( port <= 65535 ) )
+        {
             options.port = static_cast<quint16>(port);
         }
         else
@@ -342,9 +342,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if ( options.tlsFingerprint.trimmed().isEmpty() == false
-        && !options.tls )
-        {
+    if ( ( options.tlsFingerprint.trimmed().isEmpty() == false ) &&
+         !options.tls )
+    {
         qCritical().noquote() << "--tls-fingerprint requires --tls";
         return 1;
     }
@@ -352,18 +352,18 @@ int main(int argc, char *argv[])
     if ( !options.fileServerUri.trimmed().isEmpty() )
     {
         const QUrl fileServerUrl(options.fileServerUri.trimmed());
-        if ( !fileServerUrl.isValid()
-            || fileServerUrl.scheme().trimmed().isEmpty()
-            || fileServerUrl.host().trimmed().isEmpty() )
-            {
+        if ( !fileServerUrl.isValid() ||
+             fileServerUrl.scheme().trimmed().isEmpty() ||
+             fileServerUrl.host().trimmed().isEmpty() )
+        {
             qCritical().noquote() << "invalid --file-server-uri value";
             return 1;
         }
     }
 
-    if ( options.fileServerUri.trimmed().isEmpty()
-        && !options.fileServerToken.trimmed().isEmpty() )
-        {
+    if ( options.fileServerUri.trimmed().isEmpty() &&
+         !options.fileServerToken.trimmed().isEmpty() )
+    {
         qCritical().noquote() << "--file-server-token requires --file-server-uri";
         return 1;
     }

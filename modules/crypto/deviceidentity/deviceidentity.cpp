@@ -52,9 +52,9 @@ bool generateEd25519KeyPair(
     QString *error
 )
 {
-    if ( publicKey == nullptr
-        || secretKeySeed == nullptr )
-        {
+    if ( ( publicKey == nullptr ) ||
+         ( secretKeySeed == nullptr ) )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral("ed25519 key output pointer is null");
@@ -87,9 +87,9 @@ bool generateEd25519KeyPair(
     }
 
     EVP_PKEY *key = nullptr;
-    if ( EVP_PKEY_keygen(keyCtx, &key) != 1
-        || key == nullptr )
-        {
+    if ( ( EVP_PKEY_keygen(keyCtx, &key) != 1 ) ||
+         ( key == nullptr ) )
+    {
         EVP_PKEY_free(key);
         EVP_PKEY_CTX_free(keyCtx);
         if ( error != nullptr )
@@ -120,11 +120,11 @@ bool generateEd25519KeyPair(
     EVP_PKEY_free(key);
     EVP_PKEY_CTX_free(keyCtx);
 
-    if ( !exportPublicOk
-        || publicKeyLength != static_cast<size_t>(DeviceAuthConstants::ed25519PublicKeyBytes)
-        || !exportPrivateOk
-        || secretKeyLength != static_cast<size_t>(DeviceAuthConstants::ed25519SecretKeySeedBytes) )
-        {
+    if ( !exportPublicOk ||
+         ( publicKeyLength != static_cast<size_t>(DeviceAuthConstants::ed25519PublicKeyBytes) ) ||
+         !exportPrivateOk ||
+         ( secretKeyLength != static_cast<size_t>(DeviceAuthConstants::ed25519SecretKeySeedBytes) ) )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral(
@@ -208,9 +208,9 @@ bool DeviceIdentityStore::loadFromDisk(DeviceIdentity *identity, QString *error)
 
     QJsonParseError parseError;
     const QJsonDocument json = QJsonDocument::fromJson(file.readAll(), &parseError);
-    if ( parseError.error != QJsonParseError::NoError
-        || !json.isObject() )
-        {
+    if ( ( parseError.error != QJsonParseError::NoError ) ||
+         !json.isObject() )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral("invalid identity file JSON: %1").arg(path);
@@ -224,11 +224,11 @@ bool DeviceIdentityStore::loadFromDisk(DeviceIdentity *identity, QString *error)
     const QString publicKeyText = root.value("publicKey").toString();
     const QString secretKeyText = root.value("secretKey").toString();
 
-    if ( version != 1
-        || storedDeviceId.isEmpty()
-        || publicKeyText.isEmpty()
-        || secretKeyText.isEmpty() )
-        {
+    if ( ( version != 1 ) ||
+         storedDeviceId.isEmpty() ||
+         publicKeyText.isEmpty() ||
+         secretKeyText.isEmpty() )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral("identity file is missing required fields: %1").arg(path);
@@ -238,9 +238,9 @@ bool DeviceIdentityStore::loadFromDisk(DeviceIdentity *identity, QString *error)
 
     QByteArray publicKey;
     QByteArray secretKey;
-    if ( !CryptoEncoding::fromBase64Url(publicKeyText, &publicKey)
-        || !CryptoEncoding::fromBase64Url(secretKeyText, &secretKey) )
-        {
+    if ( !CryptoEncoding::fromBase64Url(publicKeyText, &publicKey) ||
+         !CryptoEncoding::fromBase64Url(secretKeyText, &secretKey) )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral(
@@ -253,11 +253,11 @@ bool DeviceIdentityStore::loadFromDisk(DeviceIdentity *identity, QString *error)
     const bool publicKeyLengthValid =
         publicKey.size() == DeviceAuthConstants::ed25519PublicKeyBytes;
     const bool secretKeyLengthValid =
-        secretKey.size() == DeviceAuthConstants::ed25519SecretKeySeedBytes
-        || secretKey.size() == DeviceAuthConstants::ed25519SecretKeyLegacyBytes;
-    if ( !publicKeyLengthValid
-        || !secretKeyLengthValid )
-        {
+        secretKey.size() == DeviceAuthConstants::ed25519SecretKeySeedBytes ||
+        secretKey.size() == DeviceAuthConstants::ed25519SecretKeyLegacyBytes;
+    if ( !publicKeyLengthValid ||
+         !secretKeyLengthValid )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral("identity key size is invalid: %1").arg(path);
@@ -322,9 +322,9 @@ bool DeviceIdentityStore::persist(const DeviceIdentity &identity, QString *error
     const QString path = resolvedPath();
     const QFileInfo fileInfo(path);
     const QDir dir = fileInfo.dir();
-    if ( !dir.exists()
-        && !dir.mkpath(".") )
-        {
+    if ( !dir.exists() &&
+         !dir.mkpath(".") )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral("failed to create identity directory: %1").arg(dir.path());

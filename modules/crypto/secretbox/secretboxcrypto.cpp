@@ -44,9 +44,9 @@ bool SecretBoxCrypto::encrypt(
     QString *error
 )
 {
-    if ( nonce == nullptr
-        || cipherText == nullptr )
-        {
+    if ( ( nonce == nullptr ) ||
+         ( cipherText == nullptr ) )
+    {
         if ( error != nullptr )
         {
             *error = QStringLiteral("nonce or cipher output pointer is null");
@@ -86,9 +86,9 @@ bool SecretBoxCrypto::encrypt(
     }
 
     const bool initOk =
-        EVP_EncryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr) == 1
-        && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, secretBoxNonceBytes, nullptr) == 1
-        && EVP_EncryptInit_ex(
+        EVP_EncryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr) == 1 &&
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, secretBoxNonceBytes, nullptr) == 1 &&
+        EVP_EncryptInit_ex(
                ctx,
                nullptr,
                nullptr,
@@ -228,9 +228,9 @@ bool SecretBoxCrypto::decrypt(
     }
 
     const bool initOk =
-        EVP_DecryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr) == 1
-        && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, secretBoxNonceBytes, nullptr) == 1
-        && EVP_DecryptInit_ex(
+        EVP_DecryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr) == 1 &&
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, secretBoxNonceBytes, nullptr) == 1 &&
+        EVP_DecryptInit_ex(
                ctx,
                nullptr,
                nullptr,

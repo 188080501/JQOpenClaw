@@ -220,9 +220,9 @@ bool uploadScreenshotFile(
         return false;
     }
 
-    if ( statusCode < 200
-        || statusCode >= 300 )
-        {
+    if ( ( statusCode < 200 ) ||
+         ( statusCode >= 300 ) )
+    {
         if ( error != nullptr )
         {
             const QString bodyText = QString::fromUtf8(responseBody).trimmed().left(200);
@@ -419,7 +419,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
             &errorCode,
             &errorMessage
         ) )
-        {
+    {
         qWarning().noquote() << QStringLiteral(
             "[node.invoke] command failed id=%1 command=%2 code=%3 message=%4"
         ).arg(invokeId, command, errorCode, errorMessage);
