@@ -14,6 +14,8 @@
 #include <QRandomGenerator>
 #include <QTimer>
 #include <QUrl>
+#include <QLockFile>
+#include <QStandardPaths>
 
 // JQOpenClaw import
 #include "nodeapplication.h"
@@ -21,6 +23,19 @@
 #include "openclawprotocol/nodeprofile.h"
 
 namespace {
+
+bool checkSingletonFlag(const QString &flag)
+{
+    auto file = new QLockFile( QString( "%1/%2" ).arg( QStandardPaths::writableLocation( QStandardPaths::TempLocation ), flag ) );
+    if ( file->tryLock() )
+    {
+        return true;
+    }
+
+    delete file;
+    return false;
+}
+
 QString generateDefaultDisplayName()
 {
     const uint suffix = QRandomGenerator::global()->bounded(10000U);
@@ -147,6 +162,12 @@ int main(int argc, char *argv[])
     app.setApplicationName("JQOpenClawNode");
     app.setApplicationVersion(NodeProfile::clientVersion());
     app.setOrganizationName("JQOpenClaw");
+
+    if ( !checkSingletonFlag( "8a6f4ab6-68d7-4a09-9e89-0e651f573b69" ) )
+    {
+        qInfo().noquote() << "another instance is already running";
+        return -1;
+    }
 
     QCommandLineParser parser;
     parser.setApplicationDescription("JQOpenClaw headless node");
