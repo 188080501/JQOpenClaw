@@ -3,7 +3,7 @@ TARGET   = JQOpenClawNode
 
 TEMPLATE = app
 
-QT += core gui network websockets
+QT += core gui network websockets widgets
 CONFIG += console c++17
 CONFIG -= app_bundle
 

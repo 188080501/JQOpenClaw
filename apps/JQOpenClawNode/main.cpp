@@ -3,11 +3,11 @@
 #include <limits>
 
 // Qt lib import
+#include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QDebug>
 #include <QFile>
-#include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
@@ -163,10 +163,11 @@ int main(int argc, char *argv[])
 {
     qSetMessagePattern( "%{time hh:mm:ss.zzz}: %{message}" );
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     app.setApplicationName("JQOpenClawNode");
     app.setApplicationVersion(NodeProfile::clientVersion());
     app.setOrganizationName("JQOpenClaw");
+    app.setQuitOnLastWindowClosed(false);
 
     if ( !checkSingletonFlag( "8a6f4ab6-68d7-4a09-9e89-0e651f573b69" ) )
     {
@@ -175,7 +176,7 @@ int main(int argc, char *argv[])
     }
 
     QCommandLineParser parser;
-    parser.setApplicationDescription("JQOpenClaw headless node");
+    parser.setApplicationDescription("JQOpenClaw node");
     parser.addHelpOption();
     parser.addVersionOption();
 

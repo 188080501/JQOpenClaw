@@ -1831,16 +1831,16 @@ bool FileReadAccess::read(
     {
         const qint64 currentReadBytes = qMin(remainingBytes, defaultReadChunkBytes);
         const QByteArray chunk = file.read(currentReadBytes);
-        if ( chunk.isNull() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.read read failed: %1").arg(file.errorString().trimmed());
-            }
-            return false;
-        }
         if ( chunk.isEmpty() )
         {
+            if ( file.error() != QFileDevice::NoError )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.read read failed: %1").arg(file.errorString().trimmed());
+                }
+                return false;
+            }
             break;
         }
 

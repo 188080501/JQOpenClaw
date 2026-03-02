@@ -3,19 +3,29 @@
 
 // Qt lib import
 #include <limits>
+#include <QAction>
+#include <QApplication>
+#include <QCursor>
 #include <QDateTime>
 #include <QDebug>
 #include <QEventLoop>
+#include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QJsonValue>
+#include <QLabel>
+#include <QMenu>
+#include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QStyle>
+#include <QSystemTrayIcon>
 #include <QUuid>
 #include <QUrl>
+#include <QWidgetAction>
 
 // JQOpenClaw import
 #include "capabilities/file/fileaccessread.h"
@@ -355,11 +365,184 @@ NodeApplication::NodeApplication(const NodeOptions &options, QObject *parent) :
     );
 }
 
+void NodeApplication::initializeSystemTray()
+{
+    if ( trayIcon_ != nullptr )
+    {
+        return;
+    }
+
+    if ( !QSystemTrayIcon::isSystemTrayAvailable() )
+    {
+        qWarning().noquote() << QStringLiteral("system tray is not available");
+        return;
+    }
+
+    trayMenu_ = new QMenu();
+    connectionStatusAction_ = new QWidgetAction(trayMenu_);
+    connectionStatusLabel_ = new QLabel(trayMenu_);
+    connectionStatusLabel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    connectionStatusAction_->setDefaultWidget(connectionStatusLabel_);
+    trayMenu_->addAction(connectionStatusAction_);
+    mainWindowAction_ = trayMenu_->addAction(QStringLiteral("操作面板"));
+    exitAction_ = trayMenu_->addAction(QStringLiteral("退出程序"));
+
+    connect(
+        mainWindowAction_,
+        &QAction::triggered,
+        this,
+        &NodeApplication::onMainWindowActionTriggered
+    );
+    connect(
+        exitAction_,
+        &QAction::triggered,
+        this,
+        &NodeApplication::onExitActionTriggered
+    );
+
+    QIcon trayIcon = QIcon::fromTheme(QStringLiteral("applications-system"));
+    if ( trayIcon.isNull() )
+    {
+        trayIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+
+    trayIcon_ = new QSystemTrayIcon(trayIcon, this);
+    trayIcon_->setToolTip(QStringLiteral("JQOpenClawNode"));
+    connect(
+        trayIcon_,
+        &QSystemTrayIcon::activated,
+        this,
+        &NodeApplication::onTrayIconActivated
+    );
+
+    updateConnectionStatusAction();
+    trayIcon_->show();
+}
+
+void NodeApplication::updateConnectionStatusAction()
+{
+    const QString statusText = connectionStateDisplayText();
+    if ( connectionStatusLabel_ != nullptr )
+    {
+        QString color = QStringLiteral("#6b7280");
+        switch ( connectionState_ )
+        {
+        case ConnectionState::Disconnected:
+            color = QStringLiteral("#6b7280");
+            break;
+        case ConnectionState::Connecting:
+            color = QStringLiteral("#b45309");
+            break;
+        case ConnectionState::Connected:
+            color = QStringLiteral("#15803d");
+            break;
+        case ConnectionState::Error:
+            color = QStringLiteral("#b91c1c");
+            break;
+        }
+
+        connectionStatusLabel_->setText(
+            QStringLiteral("  连接状态：%1  ").arg(statusText)
+        );
+        connectionStatusLabel_->setStyleSheet(
+            QStringLiteral("color: %1; font-weight: 600;")
+                .arg(color)
+        );
+    }
+
+    if ( trayIcon_ != nullptr )
+    {
+        const QString detailText = connectionStateDetail_.trimmed();
+        QString trayToolTip = QStringLiteral("JQOpenClawNode\n连接状态：%1")
+            .arg(statusText);
+        if ( !detailText.isEmpty() )
+        {
+            trayToolTip.append(
+                QStringLiteral("\n详情：%1").arg(detailText.left(120))
+            );
+        }
+        trayIcon_->setToolTip(trayToolTip);
+    }
+}
+
+QString NodeApplication::connectionStateDisplayText() const
+{
+    switch ( connectionState_ )
+    {
+    case ConnectionState::Disconnected:
+        return QStringLiteral("未连接");
+    case ConnectionState::Connecting:
+        return QStringLiteral("连接中");
+    case ConnectionState::Connected:
+        return QStringLiteral("已连接");
+    case ConnectionState::Error:
+        if ( connectionStateDetail_.isEmpty() )
+        {
+            return QStringLiteral("异常");
+        }
+        return QStringLiteral("异常(%1)").arg(connectionStateDetail_);
+    }
+
+    return QStringLiteral("未知");
+}
+
+void NodeApplication::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason)
+{
+    if ( trayMenu_ == nullptr )
+    {
+        return;
+    }
+
+    if ( ( reason != QSystemTrayIcon::Trigger ) &&
+         ( reason != QSystemTrayIcon::Context ) )
+    {
+        return;
+    }
+
+    if ( trayMenu_->isVisible() )
+    {
+        return;
+    }
+
+    trayMenu_->popup(QCursor::pos());
+}
+
+void NodeApplication::onMainWindowActionTriggered()
+{
+    qDebug().noquote() << QStringLiteral("[tray] 主界面按钮点击，暂未实现");
+}
+
+void NodeApplication::onExitActionTriggered()
+{
+    const QMessageBox::StandardButton result = QMessageBox::question(
+        nullptr,
+        QStringLiteral("退出确认"),
+        QStringLiteral("确定要退出 JQOpenClawNode 吗？"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No
+    );
+
+    if ( result != QMessageBox::Yes )
+    {
+        return;
+    }
+
+    emit finished(0);
+}
+
 void NodeApplication::start()
 {
+    initializeSystemTray();
+    connectionState_ = ConnectionState::Connecting;
+    connectionStateDetail_.clear();
+    updateConnectionStatusAction();
+
     QString initError;
     if ( !DeviceAuth::initialize(&initError) )
     {
+        connectionState_ = ConnectionState::Error;
+        connectionStateDetail_ = initError.trimmed();
+        updateConnectionStatusAction();
         qCritical().noquote() << initError;
         emit finished(1);
         return;
@@ -369,6 +552,9 @@ void NodeApplication::start()
     QString identityError;
     if ( !store.loadOrCreate(&identity_, &identityError) )
     {
+        connectionState_ = ConnectionState::Error;
+        connectionStateDetail_ = identityError.trimmed();
+        updateConnectionStatusAction();
         qCritical().noquote() << identityError;
         emit finished(1);
         return;
@@ -377,6 +563,9 @@ void NodeApplication::start()
     QString selfTestError;
     if ( !runCryptoSelfTest(&selfTestError) )
     {
+        connectionState_ = ConnectionState::Error;
+        connectionStateDetail_ = selfTestError.trimmed();
+        updateConnectionStatusAction();
         qCritical().noquote() << selfTestError;
         emit finished(1);
         return;
@@ -402,6 +591,9 @@ void NodeApplication::onChallengeReceived(const QString &nonce)
 void NodeApplication::onConnectAccepted(const QJsonObject &payload)
 {
     registered_ = true;
+    connectionState_ = ConnectionState::Connected;
+    connectionStateDetail_.clear();
+    updateConnectionStatusAction();
 
     const QJsonObject authObject = payload.value("auth").toObject();
     const QString deviceToken = authObject.value("deviceToken").toString().trimmed();
@@ -423,6 +615,9 @@ void NodeApplication::onConnectAccepted(const QJsonObject &payload)
 void NodeApplication::onConnectRejected(const QJsonObject &error)
 {
     const QString message = parseErrorMessage(error);
+    connectionState_ = ConnectionState::Error;
+    connectionStateDetail_ = message;
+    updateConnectionStatusAction();
     qCritical().noquote() << QStringLiteral("gateway connect rejected: %1").arg(message);
     emit finished(2);
 }
@@ -521,6 +716,9 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 
 void NodeApplication::onTransportError(const QString &message)
 {
+    connectionState_ = ConnectionState::Error;
+    connectionStateDetail_ = message.trimmed();
+    updateConnectionStatusAction();
     qCritical().noquote() << message;
     if ( !registered_ )
     {
@@ -530,6 +728,10 @@ void NodeApplication::onTransportError(const QString &message)
 
 void NodeApplication::onGatewayClosed()
 {
+    connectionState_ = ConnectionState::Disconnected;
+    connectionStateDetail_ = QStringLiteral("网关连接已关闭");
+    updateConnectionStatusAction();
+
     if ( !registered_ )
     {
         emit finished(1);
