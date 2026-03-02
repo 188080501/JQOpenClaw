@@ -19,7 +19,7 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 | 能力分类 | 命令 | 能力说明 |
 | --- | --- | --- |
 | `file` | `file.read` | 支持 `operation=read/lines/list/rg/stat`：文件读取（含 `offsetBytes` 分块）、按行区间读取（`startLine~endLine`）、目录遍历（含 `recursive/glob`）与元信息查询（owner/权限/时间戳）。 |
-| `file` | `file.write` | 支持写入/移动（剪切）/删除（回收站），以及 `operation=write/move/delete`、`createDirs/overwrite` 参数。 |
+| `file` | `file.write` | 支持写入/移动（剪切）/删除（回收站）/目录创建/目录删除，以及 `operation=write/move/delete/mkdir/rmdir`、`createDirs/overwrite` 参数。 |
 | `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 `exitCode/stdout/stderr` 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
 | `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名/主机名、系统名称/版本、用户名、内存、GPU、IP、硬盘容量）。 |
@@ -68,7 +68,7 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 JQOpenClaw
 ├─ apps/JQOpenClawNode/          # Node 应用入口与命令分发
 ├─ modules/openclawprotocol/     # 网关握手与 caps/commands/permissions 声明
-├─ modules/capabilities/file/    # file 能力实现（file.read / file.write：写入/移动/删除）
+├─ modules/capabilities/file/    # file 能力实现（file.read / file.write：写入/移动/删除/目录增删）
 ├─ modules/capabilities/process/ # process 能力实现（process.exec）
 ├─ modules/capabilities/system/  # system 能力实现（system.screenshot / system.info）
 ├─ modules/crypto/               # 设备身份、签名与加解密相关能力

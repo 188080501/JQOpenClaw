@@ -25,6 +25,8 @@ enum class FileWriteOperation
     Write,
     Move,
     Delete,
+    MakeDir,
+    RemoveDir,
 };
 QString extractString(const QJsonObject &object, const QString &key)
 {
@@ -101,6 +103,10 @@ QString fileWriteOperationName(FileWriteOperation operation)
         return QStringLiteral("move");
     case FileWriteOperation::Delete:
         return QStringLiteral("delete");
+    case FileWriteOperation::MakeDir:
+        return QStringLiteral("mkdir");
+    case FileWriteOperation::RemoveDir:
+        return QStringLiteral("rmdir");
     }
     return QStringLiteral("write");
 }
@@ -153,10 +159,24 @@ bool parseWriteOperation(
         *operation = FileWriteOperation::Delete;
         return true;
     }
+    if ( ( normalized == QStringLiteral("mkdir") ) ||
+         ( normalized == QStringLiteral("createdir") ) ||
+         ( normalized == QStringLiteral("createdirectory") ) )
+    {
+        *operation = FileWriteOperation::MakeDir;
+        return true;
+    }
+    if ( ( normalized == QStringLiteral("rmdir") ) ||
+         ( normalized == QStringLiteral("removedir") ) ||
+         ( normalized == QStringLiteral("deletedir") ) )
+    {
+        *operation = FileWriteOperation::RemoveDir;
+        return true;
+    }
 
     if ( error != nullptr )
     {
-        *error = QStringLiteral("operation must be write, move/cut, or delete/remove");
+        *error = QStringLiteral("operation must be write, move/cut, delete/remove, mkdir/createDir, or rmdir/removeDir");
     }
     return false;
 }
@@ -643,6 +663,163 @@ bool FileWriteAccess::write(
         ).arg(
             targetAbsolutePath,
             targetIsDirectory ? QStringLiteral("directory") : QStringLiteral("file")
+        );
+        return true;
+    }
+
+    if ( operation == FileWriteOperation::MakeDir )
+    {
+        bool createDirs = true;
+        if ( !parseOptionalBool(
+                paramsObject,
+                QStringLiteral("createDirs"),
+                true,
+                &createDirs,
+                &parseError
+            ) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = parseError;
+            }
+            return false;
+        }
+
+        const QFileInfo targetInfo(path);
+        const QString targetAbsolutePath = targetInfo.absoluteFilePath();
+        if ( targetInfo.exists() )
+        {
+            const bool isDirectory = targetInfo.isDir() && !targetInfo.isSymLink();
+            if ( !isDirectory )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.write mkdir target exists and is not a directory");
+                }
+                return false;
+            }
+
+            QJsonObject out;
+            out.insert(QStringLiteral("operation"), fileWriteOperationName(operation));
+            out.insert(QStringLiteral("path"), targetAbsolutePath);
+            out.insert(QStringLiteral("targetType"), QStringLiteral("directory"));
+            out.insert(QStringLiteral("created"), false);
+            out.insert(QStringLiteral("existed"), true);
+            *result = out;
+            return true;
+        }
+
+        qInfo().noquote() << QStringLiteral(
+            "[capability.file.write] mkdir start path=%1 createDirs=%2"
+        ).arg(
+            targetAbsolutePath,
+            createDirs ? QStringLiteral("true") : QStringLiteral("false")
+        );
+
+        bool created = false;
+        if ( createDirs )
+        {
+            QDir rootDir;
+            created = rootDir.mkpath(targetAbsolutePath);
+        }
+        else
+        {
+            const QFileInfo nonExistInfo(targetAbsolutePath);
+            QDir parentDir = nonExistInfo.absoluteDir();
+            if ( !parentDir.exists() )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.write mkdir parent directory does not exist");
+                }
+                return false;
+            }
+            created = parentDir.mkdir(nonExistInfo.fileName());
+        }
+
+        if ( !created )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.write mkdir failed");
+            }
+            return false;
+        }
+
+        QJsonObject out;
+        out.insert(QStringLiteral("operation"), fileWriteOperationName(operation));
+        out.insert(QStringLiteral("path"), targetAbsolutePath);
+        out.insert(QStringLiteral("targetType"), QStringLiteral("directory"));
+        out.insert(QStringLiteral("created"), true);
+        out.insert(QStringLiteral("existed"), false);
+        *result = out;
+
+        qInfo().noquote() << QStringLiteral(
+            "[capability.file.write] mkdir done path=%1 created=true"
+        ).arg(
+            targetAbsolutePath
+        );
+        return true;
+    }
+
+    if ( operation == FileWriteOperation::RemoveDir )
+    {
+        const QFileInfo targetInfo(path);
+        if ( !targetInfo.exists() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.write rmdir target does not exist");
+            }
+            return false;
+        }
+        if ( !targetInfo.isDir() || targetInfo.isSymLink() )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.write rmdir target must be directory");
+            }
+            return false;
+        }
+
+        const QString targetAbsolutePath = targetInfo.absoluteFilePath();
+        qInfo().noquote() << QStringLiteral(
+            "[capability.file.write] rmdir start path=%1 mode=trash"
+        ).arg(
+            targetAbsolutePath
+        );
+
+        QFile targetFile(targetAbsolutePath);
+        if ( !targetFile.moveToTrash() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.write rmdir failed to move directory to trash: %1")
+                    .arg(targetFile.errorString().trimmed());
+            }
+            return false;
+        }
+
+        QJsonObject out;
+        out.insert(QStringLiteral("operation"), fileWriteOperationName(operation));
+        out.insert(QStringLiteral("path"), targetAbsolutePath);
+        out.insert(QStringLiteral("targetType"), QStringLiteral("directory"));
+        out.insert(QStringLiteral("deleted"), true);
+        out.insert(QStringLiteral("deleteMode"), QStringLiteral("trash"));
+        *result = out;
+
+        qInfo().noquote() << QStringLiteral(
+            "[capability.file.write] rmdir done path=%1 mode=trash"
+        ).arg(
+            targetAbsolutePath
         );
         return true;
     }
