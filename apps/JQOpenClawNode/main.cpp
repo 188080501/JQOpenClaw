@@ -147,6 +147,10 @@ bool applyConfigFromFile(const QString &path, NodeOptions *options, QString *err
     {
         options->deviceFamily = root.value("deviceFamily").toString();
     }
+    if ( root.value("modelIdentifier").isString() )
+    {
+        options->modelIdentifier = root.value("modelIdentifier").toString().trimmed();
+    }
     if ( root.value("exitAfterRegister").isBool() )
     {
         options->exitAfterRegister = root.value("exitAfterRegister").toBool(false);
@@ -211,6 +215,11 @@ int main(int argc, char *argv[])
         "Device family for auth metadata",
         "family"
     );
+    const QCommandLineOption modelIdentifierOption(
+        "model-identifier",
+        "Node model identifier for client metadata",
+        "model"
+    );
     const QCommandLineOption exitAfterRegisterOption(
         "exit-after-register",
         "Exit process after registration is successful"
@@ -228,6 +237,7 @@ int main(int argc, char *argv[])
     parser.addOption(fileServerUriOption);
     parser.addOption(fileServerTokenOption);
     parser.addOption(deviceFamilyOption);
+    parser.addOption(modelIdentifierOption);
     parser.addOption(exitAfterRegisterOption);
 
     parser.process(app);
@@ -312,6 +322,11 @@ int main(int argc, char *argv[])
     if ( parser.isSet(deviceFamilyOption) )
     {
         options.deviceFamily = parser.value(deviceFamilyOption);
+    }
+
+    if ( parser.isSet(modelIdentifierOption) )
+    {
+        options.modelIdentifier = parser.value(modelIdentifierOption).trimmed();
     }
 
     if ( parser.isSet(exitAfterRegisterOption) )

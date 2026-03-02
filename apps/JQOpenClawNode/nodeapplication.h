@@ -34,10 +34,15 @@ private:
     void onGatewayClosed();
 
     bool runCryptoSelfTest(QString *error) const;
-    bool parseInvokeParamsJson(const QString &paramsJson, QJsonValue *params, QString *error) const;
+    bool parseInvokeParamsJson(
+        const QJsonValue &paramsJsonValue,
+        QJsonValue *params,
+        QString *error
+    ) const;
     bool executeInvokeCommand(
         const QString &command,
         const QJsonValue &params,
+        int invokeTimeoutMs,
         QJsonValue *payload,
         QString *errorCode,
         QString *errorMessage

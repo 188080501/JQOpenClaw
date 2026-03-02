@@ -91,6 +91,10 @@ bool NodeRegistrar::buildConnectParams(
     clientObject.insert("platform", platformName());
     clientObject.insert("mode", QStringLiteral("node"));
     clientObject.insert("deviceFamily", options_.deviceFamily);
+    if ( !options_.modelIdentifier.trimmed().isEmpty() )
+    {
+        clientObject.insert("modelIdentifier", options_.modelIdentifier.trimmed());
+    }
     if ( !options_.displayName.trimmed().isEmpty() )
     {
         clientObject.insert("displayName", options_.displayName.trimmed());

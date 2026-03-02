@@ -9,8 +9,13 @@
 class ProcessExec
 {
 public:
-    static bool execute(const QJsonValue &params, QJsonObject *result, QString *error);
+    static bool execute(
+        const QJsonValue &params,
+        int invokeTimeoutMs,
+        QJsonObject *result,
+        QString *error,
+        bool *invalidParams
+    );
 };
 
 #endif // JQOPENCLAW_CAPABILITIES_PROCESS_PROCESSEXEC_H_
-

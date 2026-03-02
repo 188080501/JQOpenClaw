@@ -11,8 +11,10 @@ class FileReadAccess
 public:
     static bool read(
         const QJsonValue &params,
+        int invokeTimeoutMs,
         QJsonObject *result,
-        QString *error
+        QString *error,
+        bool *invalidParams
     );
 };
 

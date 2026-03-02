@@ -153,16 +153,12 @@ bool parseReadOperation(
         *operation = FileReadOperation::Read;
         return true;
     }
-    if ( ( normalized == QStringLiteral("list") ) ||
-         ( normalized == QStringLiteral("ls") ) ||
-         ( normalized == QStringLiteral("dir") ) )
+    if ( normalized == QStringLiteral("list") )
     {
         *operation = FileReadOperation::List;
         return true;
     }
-    if ( ( normalized == QStringLiteral("rg") ) ||
-         ( normalized == QStringLiteral("grep") ) ||
-         ( normalized == QStringLiteral("search") ) )
+    if ( normalized == QStringLiteral("rg") )
     {
         *operation = FileReadOperation::Rg;
         return true;
@@ -407,10 +403,17 @@ QString encodingName(ContentEncoding encoding)
 
 bool FileReadAccess::read(
     const QJsonValue &params,
+    int invokeTimeoutMs,
     QJsonObject *result,
-    QString *error
+    QString *error,
+    bool *invalidParams
 )
 {
+    if ( invalidParams != nullptr )
+    {
+        *invalidParams = false;
+    }
+
     if ( result == nullptr )
     {
         if ( error != nullptr )
@@ -421,6 +424,10 @@ bool FileReadAccess::read(
     }
     if ( !params.isObject() )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = QStringLiteral("file.read params must be object");
@@ -432,6 +439,10 @@ bool FileReadAccess::read(
     const QString path = extractString(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = QStringLiteral("file.read path is required");
@@ -443,6 +454,10 @@ bool FileReadAccess::read(
     FileReadOperation operation = FileReadOperation::Read;
     if ( !parseReadOperation(paramsObject, &operation, &parseError) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -480,6 +495,10 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = parseError;
@@ -488,13 +507,20 @@ bool FileReadAccess::read(
         }
 
         qint64 maxEntries = defaultReadMaxEntries;
-        if ( !parseReadMaxEntries(paramsObject, &maxEntries, &parseError) )
+        if ( includeEntries )
         {
-            if ( error != nullptr )
+            if ( !parseReadMaxEntries(paramsObject, &maxEntries, &parseError) )
             {
-                *error = parseError;
+                if ( invalidParams != nullptr )
+                {
+                    *invalidParams = true;
+                }
+                if ( error != nullptr )
+                {
+                    *error = parseError;
+                }
+                return false;
             }
-            return false;
         }
 
         const QDir dir(fileInfo.absoluteFilePath());
@@ -573,6 +599,10 @@ bool FileReadAccess::read(
         const QString pattern = extractString(paramsObject, QStringLiteral("pattern"));
         if ( pattern.isEmpty() )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = QStringLiteral("file.read rg pattern is required");
@@ -583,6 +613,10 @@ bool FileReadAccess::read(
         qint64 maxMatches = defaultRgMaxMatches;
         if ( !parseRgMaxMatches(paramsObject, &maxMatches, &parseError) )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = parseError;
@@ -599,6 +633,10 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = parseError;
@@ -615,6 +653,10 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = parseError;
@@ -631,6 +673,10 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = parseError;
@@ -659,15 +705,22 @@ bool FileReadAccess::read(
         }
         rgArguments << pattern << fileInfo.absoluteFilePath();
 
+        int rgTimeoutMs = readRgTimeoutMs;
+        if ( invokeTimeoutMs > 0 )
+        {
+            rgTimeoutMs = qMax(1, qMin(readRgTimeoutMs, invokeTimeoutMs));
+        }
+
         qInfo().noquote() << QStringLiteral(
-            "[capability.file.read] rg start path=%1 pattern=%2 maxMatches=%3 caseSensitive=%4 includeHidden=%5 literal=%6"
+            "[capability.file.read] rg start path=%1 pattern=%2 maxMatches=%3 caseSensitive=%4 includeHidden=%5 literal=%6 timeoutMs=%7"
         ).arg(
             fileInfo.absoluteFilePath(),
             pattern,
             QString::number(maxMatches),
             caseSensitive ? QStringLiteral("true") : QStringLiteral("false"),
             includeHidden ? QStringLiteral("true") : QStringLiteral("false"),
-            literal ? QStringLiteral("true") : QStringLiteral("false")
+            literal ? QStringLiteral("true") : QStringLiteral("false"),
+            QString::number(rgTimeoutMs)
         );
 
         QProcess process;
@@ -684,7 +737,7 @@ bool FileReadAccess::read(
             return false;
         }
 
-        if ( !process.waitForFinished(readRgTimeoutMs) )
+        if ( !process.waitForFinished(rgTimeoutMs) )
         {
             process.kill();
             process.waitForFinished(readRgKillWaitTimeoutMs);
@@ -866,6 +919,10 @@ bool FileReadAccess::read(
             &parseError
         ) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -876,6 +933,10 @@ bool FileReadAccess::read(
     qint64 maxBytes = defaultReadMaxBytes;
     if ( !parseReadMaxBytes(paramsObject, &maxBytes, &parseError) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;

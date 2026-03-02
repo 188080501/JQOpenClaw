@@ -19,6 +19,7 @@ struct NodeOptions
     QString fileServerUri;
     QString fileServerToken;
     QString deviceFamily = "windows-pc";
+    QString modelIdentifier = "JQOpenClawNode";
     bool exitAfterRegister = false;
 };
 

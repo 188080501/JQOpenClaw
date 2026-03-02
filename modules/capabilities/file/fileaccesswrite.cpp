@@ -314,9 +314,15 @@ bool removePath(
 bool FileWriteAccess::write(
     const QJsonValue &params,
     QJsonObject *result,
-    QString *error
+    QString *error,
+    bool *invalidParams
 )
 {
+    if ( invalidParams != nullptr )
+    {
+        *invalidParams = false;
+    }
+
     if ( result == nullptr )
     {
         if ( error != nullptr )
@@ -327,6 +333,10 @@ bool FileWriteAccess::write(
     }
     if ( !params.isObject() )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = QStringLiteral("file.write params must be object");
@@ -338,6 +348,10 @@ bool FileWriteAccess::write(
     const QString path = extractString(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = QStringLiteral("file.write path is required");
@@ -355,6 +369,10 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -363,6 +381,10 @@ bool FileWriteAccess::write(
     }
     if ( !allowWrite )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = QStringLiteral("file.write is disabled by default; set allowWrite=true to proceed");
@@ -373,6 +395,10 @@ bool FileWriteAccess::write(
     FileWriteOperation operation = FileWriteOperation::Write;
     if ( !parseWriteOperation(paramsObject, &operation, &parseError) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -392,6 +418,10 @@ bool FileWriteAccess::write(
         }();
         if ( destinationPath.isEmpty() )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = QStringLiteral("file.write move requires destinationPath or toPath");
@@ -414,6 +444,10 @@ bool FileWriteAccess::write(
         const QString destinationAbsolutePath = destinationInfo.absoluteFilePath();
         if ( sourceAbsolutePath.compare(destinationAbsolutePath, Qt::CaseInsensitive) == 0 )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = QStringLiteral("file.write move source and destination must be different");
@@ -430,6 +464,10 @@ bool FileWriteAccess::write(
                 &parseError
             ) )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = parseError;
@@ -446,6 +484,10 @@ bool FileWriteAccess::write(
                 &parseError
             ) )
         {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
             if ( error != nullptr )
             {
                 *error = parseError;
@@ -608,6 +650,10 @@ bool FileWriteAccess::write(
     const QJsonValue contentValue = paramsObject.value(QStringLiteral("content"));
     if ( !contentValue.isString() )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = QStringLiteral("file.write content must be string");
@@ -623,6 +669,10 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -639,6 +689,10 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -655,6 +709,10 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -665,6 +723,10 @@ bool FileWriteAccess::write(
     QByteArray contentBytes;
     if ( !decodeContent(contentValue.toString(), encoding, &contentBytes, &parseError) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
@@ -673,6 +735,10 @@ bool FileWriteAccess::write(
     }
     if ( contentBytes.size() > maxWriteBytes )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = QStringLiteral(

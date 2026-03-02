@@ -21,6 +21,9 @@
 - `nodeId`、`command`、`idempotencyKey` 必填。
 - `params` 可省略，省略时等价空对象。
 - 每次请求使用新 UUID 作为 `idempotencyKey`。
+- 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。
+- `paramsJSON` 缺失或 `null` 时按空对象处理；若存在但不是字符串、为空字符串、或解析后不是对象，返回 `INVALID_PARAMS`。
+- `node.invoke.params.timeoutMs` 作为本次请求总预算。节点内部会将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值，`timeoutMs<=0` 视为不裁剪）。
 
 ## 2. file.read
 
@@ -31,16 +34,17 @@
 - `operation`：字符串，可选，默认 `read`。可选值：`read` / `list` / `rg`。
 - `read` 模式参数：
   - `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
-  - `maxBytes`：数字，可选，默认 `1048576`，范围 `[1, 20971520]`。
+  - `maxBytes`：整数，可选，默认 `1048576`，范围 `[1, 20971520]`。
 - `list` 模式参数：
   - `includeEntries`：布尔，可选，默认 `true`。是否返回目录项列表。
-  - `maxEntries`：数字，可选，默认 `200`，范围 `[1, 5000]`。仅在 `includeEntries=true` 时生效。
+  - `maxEntries`：整数，可选，默认 `200`，范围 `[1, 5000]`。仅在 `includeEntries=true` 时生效。
 - `rg` 模式参数：
   - `pattern`：字符串，必填。
-  - `maxMatches`：数字，可选，默认 `200`，范围 `[1, 5000]`。
+  - `maxMatches`：整数，可选，默认 `200`，范围 `[1, 5000]`。
   - `caseSensitive`：布尔，可选，默认 `false`。
   - `includeHidden`：布尔，可选，默认 `false`。
   - `literal`：布尔，可选，默认 `false`（固定字符串匹配）。
+  - 内部执行超时：默认 `60000ms`，若 `node.invoke.timeoutMs > 0`，实际超时为二者较小值。
 
 示例：
 
@@ -243,8 +247,7 @@
 用途：远程执行进程命令（QProcess）。
 
 `params`：
-- `command`：字符串，可选。存在时走 `cmd.exe /C <command>`。
-- `program`：字符串，可选。`command` 未提供时必填。
+- `program`：字符串，必填。
 - `arguments`：字符串数组，可选。
 - `workingDirectory`：字符串，可选。
 - `stdin`：字符串，可选。
@@ -252,6 +255,7 @@
 - `inheritEnvironment`：布尔，可选，默认 `true`。
 - `environment`：对象，可选，键和值都必须是字符串。
 - `mergeChannels`：布尔，可选，默认 `false`。
+- 超时裁剪：若 `node.invoke.timeoutMs > 0`，实际执行超时为 `min(process.exec.params.timeoutMs, node.invoke.timeoutMs)`。
 
 示例（program 模式）：
 
@@ -291,6 +295,7 @@
 
 判定建议：
 - 优先使用 `ok` 与 `resultClass` 判断执行结果。
+- `resultClass=timeout`（或 `timedOut=true`）时，`node.invoke` 仍返回成功结构，调用方应按业务将其视为超时失败。
 - 无进程级错误时，不返回 `processError*` 字段。
 
 ## 5. system.screenshot
@@ -323,19 +328,28 @@
 ## 7. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失或类型不匹配。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.exec` 参数校验失败）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
-  - 常见原因：路径错误、权限不足、父目录不存在、内容编码不合法、移动目标已存在、系统回收站不可用或拒绝接收目标。
-  - 优先检查 `path`、`operation`、`encoding`、`pattern`、`maxMatches`、`allowWrite`、`createDirs`、`overwrite`。
+  - 常见原因：路径错误、权限不足、父目录不存在、移动目标已存在、系统回收站不可用或拒绝接收目标。
+  - 优先检查路径、权限、目录状态、回收站状态等执行环境问题。
 
 - `PROCESS_EXEC_FAILED`
-  - 常见原因：程序不存在、参数错误、权限不足、超时。
-  - 优先检查 `program`、`arguments`、`workingDirectory`、`timeoutMs`。
+  - 常见原因：程序不存在、权限不足、启动失败等无法产出结构化执行结果。
+  - 优先检查 `program`、`workingDirectory`、权限、运行环境。
+
+- `SYSTEM_INFO_FAILED`
+  - 系统信息采集失败。
+
+- `SCREENSHOT_CAPTURE_FAILED`
+  - 截图采集阶段失败（未进入上传）。
+
+- `SCREENSHOT_UPLOAD_FAILED`
+  - 截图已采集但全部上传失败。
 
 - `TIMEOUT`
-  - 节点执行超时。
+  - `node.invoke` 请求级超时（网关等待节点结果超时）。
   - 增大 `timeoutMs` 或缩小执行范围。
 
 - `COMMAND_NOT_SUPPORTED`

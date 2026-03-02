@@ -71,6 +71,42 @@ bool parseArguments(
     return true;
 }
 
+bool parseOptionalBool(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    bool defaultValue,
+    bool *value,
+    QString *error
+)
+{
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("process.exec internal error: bool output pointer is null");
+        }
+        return false;
+    }
+
+    *value = defaultValue;
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() || rawValue.isNull() )
+    {
+        return true;
+    }
+    if ( !rawValue.isBool() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("process.exec %1 must be boolean").arg(field);
+        }
+        return false;
+    }
+
+    *value = rawValue.toBool();
+    return true;
+}
+
 bool parseTimeoutMs(
     const QJsonObject &paramsObject,
     int *timeoutMs,
@@ -142,10 +178,18 @@ bool parseEnvironment(
         return false;
     }
 
-    const QJsonValue inheritEnvironmentValue = paramsObject.value(QStringLiteral("inheritEnvironment"));
-    const bool inheritEnvironment = inheritEnvironmentValue.isBool()
-        ? inheritEnvironmentValue.toBool()
-        : true;
+    bool inheritEnvironment = true;
+    if ( !parseOptionalBool(
+            paramsObject,
+            QStringLiteral("inheritEnvironment"),
+            true,
+            &inheritEnvironment,
+            error
+        ) )
+    {
+        return false;
+    }
+
     *environment = inheritEnvironment
         ? QProcessEnvironment::systemEnvironment()
         : QProcessEnvironment();
@@ -228,29 +272,31 @@ bool parseExecuteRequest(
     const QJsonObject paramsObject = params.toObject();
     const QString command = extractString(paramsObject, QStringLiteral("command"));
     const QString programValue = extractString(paramsObject, QStringLiteral("program"));
-
-    arguments->clear();
     if ( !command.isEmpty() )
     {
-        *program = QStringLiteral("cmd.exe");
-        arguments->append(QStringLiteral("/C"));
-        arguments->append(command);
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "process.exec command mode is not supported; use program and arguments"
+            );
+        }
+        return false;
     }
-    else
+
+    arguments->clear();
+    if ( programValue.isEmpty() )
     {
-        if ( programValue.isEmpty() )
+        if ( error != nullptr )
         {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("process.exec requires command or program");
-            }
-            return false;
+            *error = QStringLiteral("process.exec requires program");
         }
-        *program = programValue;
-        if ( !parseArguments(paramsObject, arguments, error) )
-        {
-            return false;
-        }
+        return false;
+    }
+
+    *program = programValue;
+    if ( !parseArguments(paramsObject, arguments, error) )
+    {
+        return false;
     }
 
     *workingDirectory = extractString(paramsObject, QStringLiteral("workingDirectory"));
@@ -282,9 +328,13 @@ bool parseExecuteRequest(
         return false;
     }
 
-    const QJsonValue mergeChannelsValue = paramsObject.value(QStringLiteral("mergeChannels"));
-    *mergeChannels = mergeChannelsValue.isBool() ? mergeChannelsValue.toBool() : false;
-    return true;
+    return parseOptionalBool(
+        paramsObject,
+        QStringLiteral("mergeChannels"),
+        false,
+        mergeChannels,
+        error
+    );
 }
 
 QJsonArray toJsonArray(const QStringList &items)
@@ -349,8 +399,19 @@ QString processResultClass(bool timedOut, QProcess::ExitStatus exitStatus, int e
 }
 }
 
-bool ProcessExec::execute(const QJsonValue &params, QJsonObject *result, QString *error)
+bool ProcessExec::execute(
+    const QJsonValue &params,
+    int invokeTimeoutMs,
+    QJsonObject *result,
+    QString *error,
+    bool *invalidParams
+)
 {
+    if ( invalidParams != nullptr )
+    {
+        *invalidParams = false;
+    }
+
     if ( result == nullptr )
     {
         if ( error != nullptr )
@@ -380,11 +441,20 @@ bool ProcessExec::execute(const QJsonValue &params, QJsonObject *result, QString
             &parseError
         ) )
     {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
         if ( error != nullptr )
         {
             *error = parseError;
         }
         return false;
+    }
+
+    if ( invokeTimeoutMs > 0 )
+    {
+        timeoutMs = qMax(1, qMin(timeoutMs, invokeTimeoutMs));
     }
 
     qInfo().noquote() << QStringLiteral(

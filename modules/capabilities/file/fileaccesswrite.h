@@ -12,7 +12,8 @@ public:
     static bool write(
         const QJsonValue &params,
         QJsonObject *result,
-        QString *error
+        QString *error,
+        bool *invalidParams
     );
 };
 

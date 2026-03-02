@@ -2,6 +2,7 @@
 #include "nodeapplication.h"
 
 // Qt lib import
+#include <limits>
 #include <QDateTime>
 #include <QDebug>
 #include <QEventLoop>
@@ -256,6 +257,58 @@ bool uploadScreenshotFile(
     *fileUrl = fileAccessUrl.toString(QUrl::FullyEncoded);
     return true;
 }
+
+bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *error)
+{
+    if ( timeoutMs == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("invoke timeout output pointer is null");
+        }
+        return false;
+    }
+
+    *timeoutMs = -1;
+    const QJsonValue timeoutValue = payload.value(QStringLiteral("timeoutMs"));
+    if ( timeoutValue.isUndefined() || timeoutValue.isNull() )
+    {
+        return true;
+    }
+
+    if ( !timeoutValue.isDouble() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("timeoutMs must be positive integer");
+        }
+        return false;
+    }
+
+    const double rawTimeoutMs = timeoutValue.toDouble();
+    if ( ( rawTimeoutMs < 1.0 ) ||
+         ( rawTimeoutMs > static_cast<double>(std::numeric_limits<int>::max()) ) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("timeoutMs must be positive integer");
+        }
+        return false;
+    }
+
+    const int parsedTimeoutMs = static_cast<int>(rawTimeoutMs);
+    if ( rawTimeoutMs != static_cast<double>(parsedTimeoutMs) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("timeoutMs must be positive integer");
+        }
+        return false;
+    }
+
+    *timeoutMs = parsedTimeoutMs;
+    return true;
+}
 }
 
 NodeApplication::NodeApplication(const NodeOptions &options, QObject *parent) :
@@ -331,6 +384,11 @@ void NodeApplication::start()
 
     qInfo().noquote() << QStringLiteral("device identity: %1").arg(identity_.deviceId);
     qInfo().noquote() << QStringLiteral("identity file: %1").arg(store.identityPath());
+    const QString configuredNodeId = options_.nodeId.trimmed();
+    if ( !configuredNodeId.isEmpty() )
+    {
+        qInfo().noquote() << QStringLiteral("node instance id: %1").arg(configuredNodeId);
+    }
 
     gatewayClient_.setOptions(options_);
     gatewayClient_.open();
@@ -374,19 +432,14 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     const QString invokeId = extractString(payload, QStringLiteral("id"));
     const QString nodeId = extractString(payload, QStringLiteral("nodeId"));
     const QString command = extractString(payload, QStringLiteral("command"));
-    QString paramsJson = extractString(payload, QStringLiteral("paramsJSON"));
-    if ( paramsJson.isEmpty() )
-    {
-        QString serializedParams;
-        if ( trySerializeJsonValue(payload.value(QStringLiteral("params")), &serializedParams) )
-        {
-            paramsJson = serializedParams;
-        }
-    }
+    const QJsonValue paramsJsonValue = payload.value(QStringLiteral("paramsJSON"));
+    const QString paramsJson = paramsJsonValue.isString()
+        ? paramsJsonValue.toString().trimmed()
+        : QString();
 
     qInfo().noquote() << QStringLiteral(
-        "[node.invoke] request received id=%1 nodeId=%2 command=%3 paramsJSON=%4"
-    ).arg(invokeId, nodeId, command, paramsJson);
+        "[node.invoke] request received id=%1 command=%2 paramsJSON=%3"
+    ).arg(invokeId, command, paramsJson);
 
     if ( invokeId.isEmpty() || nodeId.isEmpty() || command.isEmpty() )
     {
@@ -398,10 +451,25 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 
     QJsonValue params = QJsonObject();
     QString parseError;
-    if ( !parseInvokeParamsJson(paramsJson, &params, &parseError) )
+    if ( !parseInvokeParamsJson(paramsJsonValue, &params, &parseError) )
     {
         qWarning().noquote() << QStringLiteral(
             "[node.invoke] invalid params id=%1 command=%2 error=%3"
+        ).arg(invokeId, command, parseError);
+        sendInvokeError(
+            invokeId,
+            nodeId,
+            QStringLiteral("INVALID_PARAMS"),
+            parseError
+        );
+        return;
+    }
+
+    int invokeTimeoutMs = -1;
+    if ( !parseInvokeTimeoutMs(payload, &invokeTimeoutMs, &parseError) )
+    {
+        qWarning().noquote() << QStringLiteral(
+            "[node.invoke] invalid timeout id=%1 command=%2 error=%3"
         ).arg(invokeId, command, parseError);
         sendInvokeError(
             invokeId,
@@ -418,6 +486,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     if ( !executeInvokeCommand(
             command,
             params,
+            invokeTimeoutMs,
             &responsePayload,
             &errorCode,
             &errorMessage
@@ -499,7 +568,7 @@ bool NodeApplication::runCryptoSelfTest(QString *error) const
 }
 
 bool NodeApplication::parseInvokeParamsJson(
-    const QString &paramsJson,
+    const QJsonValue &paramsJsonValue,
     QJsonValue *params,
     QString *error
 ) const
@@ -513,11 +582,29 @@ bool NodeApplication::parseInvokeParamsJson(
         return false;
     }
 
-    const QString normalized = paramsJson.trimmed();
-    if ( normalized.isEmpty() )
+    if ( paramsJsonValue.isUndefined() || paramsJsonValue.isNull() )
     {
         *params = QJsonObject();
         return true;
+    }
+
+    if ( !paramsJsonValue.isString() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("paramsJSON must be string");
+        }
+        return false;
+    }
+
+    const QString normalized = paramsJsonValue.toString().trimmed();
+    if ( normalized.isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("paramsJSON must be object");
+        }
+        return false;
     }
 
     QJsonParseError parseError;
@@ -540,15 +627,10 @@ bool NodeApplication::parseInvokeParamsJson(
         *params = json.object();
         return true;
     }
-    if ( json.isArray() )
-    {
-        *params = json.array();
-        return true;
-    }
 
     if ( error != nullptr )
     {
-        *error = QStringLiteral("paramsJSON must be object or array");
+        *error = QStringLiteral("paramsJSON must be object");
     }
     return false;
 }
@@ -556,6 +638,7 @@ bool NodeApplication::parseInvokeParamsJson(
 bool NodeApplication::executeInvokeCommand(
     const QString &command,
     const QJsonValue &params,
+    int invokeTimeoutMs,
     QJsonValue *payload,
     QString *errorCode,
     QString *errorMessage
@@ -576,7 +659,6 @@ bool NodeApplication::executeInvokeCommand(
 
     if ( command == QStringLiteral("system.info") )
     {
-        Q_UNUSED(params);
         QJsonObject info;
         QString collectError;
         if ( !SystemInfo::collect(&info, &collectError) )
@@ -599,7 +681,6 @@ bool NodeApplication::executeInvokeCommand(
 
     if ( command == QStringLiteral("system.screenshot") )
     {
-        Q_UNUSED(params);
         QList<SystemScreenshot::CaptureResult> captures;
         QString captureError;
         if ( !SystemScreenshot::captureAllToJpg(&captures, &captureError) )
@@ -683,11 +764,20 @@ bool NodeApplication::executeInvokeCommand(
     {
         QJsonObject executeResult;
         QString executeError;
-        if ( !ProcessExec::execute(params, &executeResult, &executeError) )
+        bool invalidParams = false;
+        if ( !ProcessExec::execute(
+                params,
+                invokeTimeoutMs,
+                &executeResult,
+                &executeError,
+                &invalidParams
+            ) )
         {
             if ( errorCode != nullptr )
             {
-                *errorCode = QStringLiteral("PROCESS_EXEC_FAILED");
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("PROCESS_EXEC_FAILED");
             }
             if ( errorMessage != nullptr )
             {
@@ -706,11 +796,20 @@ bool NodeApplication::executeInvokeCommand(
     {
         QJsonObject readResult;
         QString readError;
-        if ( !FileReadAccess::read(params, &readResult, &readError) )
+        bool invalidParams = false;
+        if ( !FileReadAccess::read(
+                params,
+                invokeTimeoutMs,
+                &readResult,
+                &readError,
+                &invalidParams
+            ) )
         {
             if ( errorCode != nullptr )
             {
-                *errorCode = QStringLiteral("FILE_READ_FAILED");
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("FILE_READ_FAILED");
             }
             if ( errorMessage != nullptr )
             {
@@ -729,11 +828,14 @@ bool NodeApplication::executeInvokeCommand(
     {
         QJsonObject writeResult;
         QString writeError;
-        if ( !FileWriteAccess::write(params, &writeResult, &writeError) )
+        bool invalidParams = false;
+        if ( !FileWriteAccess::write(params, &writeResult, &writeError, &invalidParams) )
         {
             if ( errorCode != nullptr )
             {
-                *errorCode = QStringLiteral("FILE_WRITE_FAILED");
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("FILE_WRITE_FAILED");
             }
             if ( errorMessage != nullptr )
             {
