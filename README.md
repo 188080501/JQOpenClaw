@@ -13,8 +13,8 @@
 
 | 能力分类 | 命令 | 能力说明 |
 | --- | --- | --- |
-| `file` | `file.read` | 读取指定文件内容，支持 `utf8/base64` 返回与最大读取字节限制。 |
-| `file` | `file.write` | 写入指定文件内容，支持 `utf8/base64` 输入、追加写入与自动创建目录。 |
+| `file` | `file.read` | 通过 `operation=read/list/rg` 执行文件读取、目录列表或 `rg` 搜索。 |
+| `file` | `file.write` | 默认禁用；需显式 `allowWrite=true` 才执行。支持写入/移动（剪切）/删除（回收站），以及 `operation=write/move/delete`、`createDirs/overwrite` 参数。 |
 | `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 `exitCode/stdout/stderr` 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
 | `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名、内存、GPU、IP、硬盘容量）。 |
@@ -57,7 +57,7 @@
 JQOpenClaw
 ├─ apps/JQOpenClawNode/          # Node 应用入口与命令分发
 ├─ modules/openclawprotocol/     # 网关握手与 caps/commands/permissions 声明
-├─ modules/capabilities/file/    # file 能力实现（file.read / file.write）
+├─ modules/capabilities/file/    # file 能力实现（file.read / file.write：写入/移动/删除）
 ├─ modules/capabilities/process/ # process 能力实现（process.exec）
 ├─ modules/capabilities/system/  # system 能力实现（system.screenshot / system.info）
 ├─ modules/crypto/               # 设备身份、签名与加解密相关能力
@@ -69,4 +69,3 @@ JQOpenClaw
 - OpenSSL 依赖说明：[docs/OpenSSL依赖.md](docs/OpenSSL依赖.md)
 - Nginx 依赖说明：[docs/Nginx依赖.md](docs/Nginx依赖.md)
 - Nginx 配置模板：[docs/data.conf](docs/data.conf)
-

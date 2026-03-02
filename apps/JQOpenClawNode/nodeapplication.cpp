@@ -17,7 +17,8 @@
 #include <QUrl>
 
 // JQOpenClaw import
-#include "capabilities/file/fileaccess.h"
+#include "capabilities/file/fileaccessread.h"
+#include "capabilities/file/fileaccesswrite.h"
 #include "capabilities/process/processexec.h"
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
@@ -705,7 +706,7 @@ bool NodeApplication::executeInvokeCommand(
     {
         QJsonObject readResult;
         QString readError;
-        if ( !FileAccess::read(params, &readResult, &readError) )
+        if ( !FileReadAccess::read(params, &readResult, &readError) )
         {
             if ( errorCode != nullptr )
             {
@@ -728,7 +729,7 @@ bool NodeApplication::executeInvokeCommand(
     {
         QJsonObject writeResult;
         QString writeError;
-        if ( !FileAccess::write(params, &writeResult, &writeError) )
+        if ( !FileWriteAccess::write(params, &writeResult, &writeError) )
         {
             if ( errorCode != nullptr )
             {

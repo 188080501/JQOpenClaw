@@ -1,5 +1,0 @@
-interface:
-  display_name: "JQOpenClaw Node 调用器"
-  short_description: "统一调用 JQOpenClawNode 的 node.invoke 能力"
-  default_prompt: "请按 JQOpenClawNode 规范构造 node.invoke 调用并返回可执行结果"
-

@@ -24,12 +24,23 @@
 
 ## 2. file.read
 
-用途：读取文件内容。
+用途：读取文件内容、目录列表，或执行 `rg` 搜索。
 
 `params`：
 - `path`：字符串，必填。
-- `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
-- `maxBytes`：数字，可选，默认 `1048576`，范围 `[1, 20971520]`。
+- `operation`：字符串，可选，默认 `read`。可选值：`read` / `list` / `rg`。
+- `read` 模式参数：
+  - `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
+  - `maxBytes`：数字，可选，默认 `1048576`，范围 `[1, 20971520]`。
+- `list` 模式参数：
+  - `includeEntries`：布尔，可选，默认 `true`。是否返回目录项列表。
+  - `maxEntries`：数字，可选，默认 `200`，范围 `[1, 5000]`。仅在 `includeEntries=true` 时生效。
+- `rg` 模式参数：
+  - `pattern`：字符串，必填。
+  - `maxMatches`：数字，可选，默认 `200`，范围 `[1, 5000]`。
+  - `caseSensitive`：布尔，可选，默认 `false`。
+  - `includeHidden`：布尔，可选，默认 `false`。
+  - `literal`：布尔，可选，默认 `false`（固定字符串匹配）。
 
 示例：
 
@@ -40,6 +51,7 @@
     "nodeId": "<node-id>",
     "command": "file.read",
     "params": {
+      "operation": "read",
       "path": "C:/Windows/win.ini",
       "encoding": "utf8",
       "maxBytes": 8192
@@ -50,24 +62,98 @@
 }
 ```
 
+示例（list 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "file.read",
+    "params": {
+      "operation": "list",
+      "path": "C:/Temp",
+      "includeEntries": true,
+      "maxEntries": 200
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
+示例（rg 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "file.read",
+    "params": {
+      "operation": "rg",
+      "path": "C:/Repos/project",
+      "pattern": "TODO",
+      "maxMatches": 200
+    },
+    "timeoutMs": 30000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
 返回重点（payload）：
-- `path`
-- `encoding`
-- `sizeBytes`
-- `readBytes`
-- `truncated`
-- `content`
+- 公共字段：
+  - `path`
+  - `operation`
+  - `targetType`：`file` 或 `directory`
+- `read` 模式字段：
+  - `encoding`
+  - `sizeBytes`
+  - `readBytes`
+  - `truncated`
+  - `content`
+- `list` 模式字段：
+  - `directoryCount`
+  - `fileCount`
+  - `otherCount`
+  - `totalCount`
+  - `includeEntries`
+  - `maxEntries`（仅 `includeEntries=true` 返回）
+  - `truncated`（仅 `includeEntries=true` 返回）
+  - `entries`（仅 `includeEntries=true` 返回，元素字段：`name`、`path`、`type`、`isSymLink`、`sizeBytes`[文件项才有]）
+- `rg` 模式字段：
+  - `pattern`
+  - `caseSensitive`
+  - `includeHidden`
+  - `literal`
+  - `maxMatches`
+  - `matchCount`
+  - `fileCount`
+  - `truncated`
+  - `rgExitCode`
+  - `stderr`（可选）
+  - `matches`（数组元素字段：`path`、`lineNumber`、`columnStart`、`columnEnd`、`lineText`、`matchText`）
 
 ## 3. file.write
 
-用途：写入文件内容。
+用途：写入文件内容，或执行移动（剪切）与删除操作。
 
 `params`：
 - `path`：字符串，必填。
-- `content`：字符串，必填。
-- `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
-- `append`：布尔，可选，默认 `false`。
-- `createDirs`：布尔，可选，默认 `true`。
+- `allowWrite`：布尔，可选，默认 `false`。必须显式传 `true` 才允许执行 `file.write`。
+- `operation`：字符串，可选，默认 `write`。可选值：`write` / `move`（或 `cut`）/ `delete`（或 `remove`）。
+- `write` 模式参数：
+  - `content`：字符串，必填。
+  - `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
+  - `append`：布尔，可选，默认 `false`。
+  - `createDirs`：布尔，可选，默认 `true`。
+- `move` 模式参数：
+  - `destinationPath` 或 `toPath`：字符串，必填（目标路径）。
+  - `overwrite`：布尔，可选，默认 `false`（目标存在时是否覆盖）。
+  - `createDirs`：布尔，可选，默认 `true`（自动创建目标父目录）。
+- `delete` 模式参数：
+  - 无额外必填参数。删除行为固定为移动到回收站（`QFile::moveToTrash`）。
 
 示例：
 
@@ -78,6 +164,8 @@
     "nodeId": "<node-id>",
     "command": "file.write",
     "params": {
+      "allowWrite": true,
+      "operation": "write",
       "path": "C:/Temp/jqopenclaw-output.txt",
       "content": "hello from node",
       "encoding": "utf8",
@@ -90,12 +178,65 @@
 }
 ```
 
+示例（move 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "file.write",
+    "params": {
+      "allowWrite": true,
+      "operation": "move",
+      "path": "C:/Temp/a.txt",
+      "destinationPath": "C:/Temp/archive/a.txt",
+      "overwrite": true
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
+示例（delete 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "file.write",
+    "params": {
+      "allowWrite": true,
+      "operation": "delete",
+      "path": "C:/Temp/old-data"
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
 返回重点（payload）：
-- `path`
-- `encoding`
-- `appended`
-- `bytesWritten`
-- `sizeBytes`
+- 公共字段：
+  - `operation`
+  - `path`
+- `write` 模式字段：
+  - `encoding`
+  - `appended`
+  - `bytesWritten`
+  - `sizeBytes`
+- `move` 模式字段：
+  - `fromPath`
+  - `toPath`
+  - `targetType`：`file` 或 `directory`
+  - `overwritten`
+  - `moved`
+- `delete` 模式字段：
+  - `targetType`：`file` 或 `directory`
+  - `deleted`
+  - `deleteMode`：固定 `trash`
 
 ## 4. process.exec
 
@@ -186,8 +327,8 @@
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
-  - 常见原因：路径错误、权限不足、父目录不存在、内容编码不合法。
-  - 优先检查 `path`、`encoding`、`createDirs`。
+  - 常见原因：路径错误、权限不足、父目录不存在、内容编码不合法、移动目标已存在、系统回收站不可用或拒绝接收目标。
+  - 优先检查 `path`、`operation`、`encoding`、`pattern`、`maxMatches`、`allowWrite`、`createDirs`、`overwrite`。
 
 - `PROCESS_EXEC_FAILED`
   - 常见原因：程序不存在、参数错误、权限不足、超时。
