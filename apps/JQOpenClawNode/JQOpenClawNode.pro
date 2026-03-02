@@ -12,6 +12,7 @@ INCLUDEPATH += $$PWD/../../modules
 include( $$PWD/../../modules/capabilities.pri )
 include( $$PWD/../../modules/openclawprotocol.pri )
 include( $$PWD/../../modules/crypto.pri )
+include( $$PWD/../../modules/jqcontrols.pri )
 
 HEADERS *= \
     $$PWD/nodeapplication.h

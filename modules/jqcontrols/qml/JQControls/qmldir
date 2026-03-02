@@ -1,0 +1,38 @@
+module JQControls
+
+singleton JQGlobal JQGlobal.qml
+
+JQButton JQButton.qml
+JQCheckBox JQCheckBox.qml
+JQComboBox JQComboBox.qml
+JQDateTimeTextField JQDateTimeTextField.qml
+JQDialog JQDialog.qml
+JQDoubleSpinBox JQDoubleSpinBox.qml
+JQFlatButton JQFlatButton.qml
+JQFlickable JQFlickable.qml
+JQHexTextField JQHexTextField.qml
+JQListView JQListView.qml
+JQLoadingIndicator JQLoadingIndicator.qml
+JQMenu JQMenu.qml
+JQMenuDialogOpener JQMenuDialogOpener.qml
+JQMenuItem JQMenuItem.qml
+JQMenuSeparator JQMenuSeparator.qml
+JQNavigationButton JQNavigationButton.qml
+JQNavigationInfo JQNavigationInfo.qml
+JQPane JQPane.qml
+JQRadioButton JQRadioButton.qml
+JQSnakeBar JQSnakeBar.qml
+JQSlider JQSlider.qml
+JQSpinBox JQSpinBox.qml
+JQText JQText.qml
+JQTextField JQTextField.qml
+JQWindow JQWindow.qml
+
+JQSettingsCheckBox JQSettings/JQSettingsCheckBox.qml
+JQSettingsComboBox JQSettings/JQSettingsComboBox.qml
+JQSettingsDoubleSpinBox JQSettings/JQSettingsDoubleSpinBox.qml
+JQSettingsIpAddress JQSettings/JQSettingsIpAddress.qml
+JQSettingsRow JQSettings/JQSettingsRow.qml
+JQSettingsSpinBox JQSettings/JQSettingsSpinBox.qml
+JQSettingsSlider JQSettings/JQSettingsSlider.qml
+JQSettingsTextField JQSettings/JQSettingsTextField.qml
