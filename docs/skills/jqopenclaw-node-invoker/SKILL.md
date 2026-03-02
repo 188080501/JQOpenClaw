@@ -49,6 +49,7 @@ description: 统一通过 Gateway 的 node.invoke 调用 JQOpenClawNode 能力�
   - `process.exec`：5000-120000
   - `system.info`：30000
   - `system.screenshot`：60000
+- `node.invoke.timeoutMs` 可省略；若传入，必须为正整数（毫秒），否则按 `INVALID_PARAMS` 处理。
 - `node.invoke.timeoutMs` 是请求总预算；节点会将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部超时裁剪到该预算内（取更小值）。
 - `process.exec` 支持 `program + arguments` 模式。
 - `file.read` 支持 `operation=read/list/rg`，建议显式传 `operation`；文本检索 `operation=rg` 需提供 `pattern`。

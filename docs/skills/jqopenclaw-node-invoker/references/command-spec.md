@@ -23,7 +23,8 @@
 - 每次请求使用新 UUID 作为 `idempotencyKey`。
 - 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。
 - `paramsJSON` 缺失或 `null` 时按空对象处理；若存在但不是字符串、为空字符串、或解析后不是对象，返回 `INVALID_PARAMS`。
-- `node.invoke.params.timeoutMs` 作为本次请求总预算。节点内部会将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值，`timeoutMs<=0` 视为不裁剪）。
+- `node.invoke.params.timeoutMs` 可省略；若传入，必须为正整数（毫秒），否则返回 `INVALID_PARAMS`。
+- `node.invoke.params.timeoutMs` 作为本次请求总预算。节点内部会将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值）。
 
 ## 2. file.read
 
