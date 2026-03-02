@@ -6,14 +6,10 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 
 ## 项目定位
 
-- 面向平台：Windows（桌面环境）。
+- 运行平台：Windows，后期扩展Mac和Linux。
 - 运行形态：单可执行程序（`JQOpenClawNode.exe`）接入 Gateway。
 - 协议兼容：对接 OpenClaw Gateway 的 `node.invoke` 调用链路。
 - 能力范围：文件、进程、系统信息与截图（详见下文“节点能力与命令”）。
-
-## 功能说明
-
-- 运行平台：Windows。
 - 开发基线：`Qt 6.5.3 + MSVC`。
 - 连接能力：通过指定 Gateway IP/端口/token 连接 OpenClaw Gateway WebSocket Node 模式。
 - 注册与识别：支持设备注册、设备身份识别与基础链路建立。
