@@ -14,6 +14,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QSet>
 #include <QtGlobal>
 #include <algorithm>
@@ -32,6 +33,179 @@ const qint64 maxRgMaxMatches = 5000;
 const int readRgStartTimeoutMs = 5000;
 const int readRgTimeoutMs = 60000;
 const int readRgKillWaitTimeoutMs = 3000;
+const char *readRgPowerShellFallbackScript = R"PS(
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$ErrorActionPreference = 'Stop'
+
+$targetPath = $env:JQ_FILE_READ_PATH
+$pattern = $env:JQ_FILE_READ_PATTERN
+$maxMatches = [int]$env:JQ_FILE_READ_MAX_MATCHES
+$caseSensitive = $env:JQ_FILE_READ_CASE_SENSITIVE -eq '1'
+$includeHidden = $env:JQ_FILE_READ_INCLUDE_HIDDEN -eq '1'
+$literal = $env:JQ_FILE_READ_LITERAL -eq '1'
+
+$files = @()
+if (Test-Path -LiteralPath $targetPath -PathType Container)
+{
+    if ($includeHidden)
+    {
+        $files = Get-ChildItem -LiteralPath $targetPath -Recurse -File -Force -ErrorAction Stop
+    }
+    else
+    {
+        $files = Get-ChildItem -LiteralPath $targetPath -Recurse -File -ErrorAction Stop
+    }
+}
+elseif (Test-Path -LiteralPath $targetPath -PathType Leaf)
+{
+    $files = @(Get-Item -LiteralPath $targetPath -ErrorAction Stop)
+}
+else
+{
+    throw 'target path does not exist'
+}
+
+$matches = New-Object System.Collections.ArrayList
+$truncated = $false
+
+$selectArgs = @{
+    Pattern = $pattern
+    ErrorAction = 'Stop'
+    AllMatches = $true
+}
+if ($caseSensitive)
+{
+    $selectArgs.CaseSensitive = $true
+}
+if ($literal)
+{
+    $selectArgs.SimpleMatch = $true
+}
+
+foreach ($file in $files)
+{
+    $lineMatches = Select-String -LiteralPath $file.FullName @selectArgs
+    foreach ($lineMatch in $lineMatches)
+    {
+        $lineText = if ($null -eq $lineMatch.Line) { '' } else { [string]$lineMatch.Line }
+
+        if ($literal)
+        {
+            if ($caseSensitive)
+            {
+                $comparison = [System.StringComparison]::Ordinal
+            }
+            else
+            {
+                $comparison = [System.StringComparison]::OrdinalIgnoreCase
+            }
+
+            $searchOffset = 0
+            while ($true)
+            {
+                if ($matches.Count -ge $maxMatches)
+                {
+                    $truncated = $true
+                    break
+                }
+
+                $matchIndex = $lineText.IndexOf($pattern, $searchOffset, $comparison)
+                if ($matchIndex -lt 0)
+                {
+                    break
+                }
+
+                $matchLength = [Math]::Max($pattern.Length, 1)
+                $safeLength = [Math]::Min($matchLength, [Math]::Max($lineText.Length - $matchIndex, 0))
+                $matchedText = if ($safeLength -gt 0) { $lineText.Substring($matchIndex, $safeLength) } else { '' }
+                $columnStart = [int]$matchIndex + 1
+                $columnEnd = [int]$matchIndex + [int]$matchLength
+                [void]$matches.Add(
+                    [pscustomobject]@{
+                        path = $lineMatch.Path
+                        lineNumber = $lineMatch.LineNumber
+                        columnStart = $columnStart
+                        columnEnd = $columnEnd
+                        lineText = $lineText
+                        matchText = $matchedText
+                    }
+                )
+
+                $searchOffset = $matchIndex + $matchLength
+                if ($searchOffset -ge $lineText.Length)
+                {
+                    break
+                }
+            }
+
+            if ($truncated)
+            {
+                break
+            }
+
+            continue
+        }
+
+        if ($null -eq $lineMatch.Matches -or $lineMatch.Matches.Count -eq 0)
+        {
+            if ($matches.Count -ge $maxMatches)
+            {
+                $truncated = $true
+                break
+            }
+
+            [void]$matches.Add(
+                [pscustomobject]@{
+                    path = $lineMatch.Path
+                    lineNumber = $lineMatch.LineNumber
+                    columnStart = 1
+                    columnEnd = 1
+                    lineText = $lineText
+                    matchText = ''
+                }
+            )
+            continue
+        }
+
+        foreach ($subMatch in $lineMatch.Matches)
+        {
+            if ($matches.Count -ge $maxMatches)
+            {
+                $truncated = $true
+                break
+            }
+
+            $columnStart = [int]$subMatch.Index + 1
+            $columnEnd = [int]$subMatch.Index + [int]$subMatch.Length
+            [void]$matches.Add(
+                [pscustomobject]@{
+                    path = $lineMatch.Path
+                    lineNumber = $lineMatch.LineNumber
+                    columnStart = $columnStart
+                    columnEnd = $columnEnd
+                    lineText = $lineText
+                    matchText = $subMatch.Value
+                }
+            )
+        }
+
+        if ($truncated)
+        {
+            break
+        }
+    }
+
+    if ($truncated)
+    {
+        break
+    }
+}
+
+[pscustomobject]@{
+    matches = $matches
+    truncated = $truncated
+} | ConvertTo-Json -Compress -Depth 8
+)PS";
 
 enum class ContentEncoding
 {
@@ -1546,148 +1720,329 @@ bool FileReadAccess::read(
             QString::number(rgTimeoutMs)
         );
 
-        QProcess process;
-        process.start(QStringLiteral("rg"), rgArguments);
-        if ( !process.waitForStarted(readRgStartTimeoutMs) )
+        QString searchBackend = QStringLiteral("rg");
+        int searchExitCode = 0;
+        QByteArray stdoutBytes;
+        QByteArray stderrBytes;
+        bool usePowerShellFallback = false;
+
+        QProcess rgProcess;
+        rgProcess.start(QStringLiteral("rg"), rgArguments);
+        if ( !rgProcess.waitForStarted(readRgStartTimeoutMs) )
         {
-            if ( error != nullptr )
+            usePowerShellFallback = true;
+            const QString rgStartError = rgProcess.errorString().trimmed();
+            const QString rgStartErrorLower = rgStartError.toLower();
+            const bool rgNotFound =
+                ( rgProcess.error() == QProcess::FailedToStart ) &&
+                (
+                    rgStartError.contains(QStringLiteral("系统找不到指定的文件")) ||
+                    rgStartErrorLower.contains(QStringLiteral("not found")) ||
+                    rgStartErrorLower.contains(QStringLiteral("no such file"))
+                );
+            if ( rgNotFound )
             {
-                const QString startError = process.errorString().trimmed();
-                *error = startError.isEmpty()
-                    ? QStringLiteral("file.read rg failed to start")
-                    : QStringLiteral("file.read rg failed to start: %1").arg(startError);
+                qInfo().noquote() << QStringLiteral(
+                    "[capability.file.read] rg not found, using powershell select-string fallback"
+                );
             }
-            return false;
+            else
+            {
+                qWarning().noquote() << QStringLiteral(
+                    "[capability.file.read] rg failed to start, fallback to powershell select-string: %1"
+                ).arg(rgStartError);
+            }
+        }
+        else
+        {
+            if ( !rgProcess.waitForFinished(rgTimeoutMs) )
+            {
+                rgProcess.kill();
+                rgProcess.waitForFinished(readRgKillWaitTimeoutMs);
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.read rg timed out");
+                }
+                return false;
+            }
+
+            if ( rgProcess.exitStatus() != QProcess::NormalExit )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.read rg crashed");
+                }
+                return false;
+            }
+
+            searchExitCode = rgProcess.exitCode();
+            stdoutBytes = rgProcess.readAllStandardOutput();
+            stderrBytes = rgProcess.readAllStandardError();
+            const QString rgStderrText = QString::fromLocal8Bit(stderrBytes).trimmed();
+            if ( searchExitCode == 2 )
+            {
+                if ( error != nullptr )
+                {
+                    *error = rgStderrText.isEmpty()
+                        ? QStringLiteral("file.read rg failed")
+                        : QStringLiteral("file.read rg failed: %1").arg(rgStderrText);
+                }
+                return false;
+            }
         }
 
-        if ( !process.waitForFinished(rgTimeoutMs) )
+        if ( usePowerShellFallback )
         {
-            process.kill();
-            process.waitForFinished(readRgKillWaitTimeoutMs);
-            if ( error != nullptr )
+            searchBackend = QStringLiteral("powershell.select-string");
+            QProcessEnvironment processEnvironment = QProcessEnvironment::systemEnvironment();
+            processEnvironment.insert(QStringLiteral("JQ_FILE_READ_PATH"), fileInfo.absoluteFilePath());
+            processEnvironment.insert(QStringLiteral("JQ_FILE_READ_PATTERN"), pattern);
+            processEnvironment.insert(QStringLiteral("JQ_FILE_READ_MAX_MATCHES"), QString::number(maxMatches));
+            processEnvironment.insert(
+                QStringLiteral("JQ_FILE_READ_CASE_SENSITIVE"),
+                caseSensitive ? QStringLiteral("1") : QStringLiteral("0")
+            );
+            processEnvironment.insert(
+                QStringLiteral("JQ_FILE_READ_INCLUDE_HIDDEN"),
+                includeHidden ? QStringLiteral("1") : QStringLiteral("0")
+            );
+            processEnvironment.insert(
+                QStringLiteral("JQ_FILE_READ_LITERAL"),
+                literal ? QStringLiteral("1") : QStringLiteral("0")
+            );
+
+            QStringList fallbackArguments;
+            fallbackArguments << QStringLiteral("-NoLogo")
+                              << QStringLiteral("-NoProfile")
+                              << QStringLiteral("-NonInteractive")
+                              << QStringLiteral("-ExecutionPolicy")
+                              << QStringLiteral("Bypass")
+                              << QStringLiteral("-Command")
+                              << QString::fromLatin1(readRgPowerShellFallbackScript);
+
+            QProcess fallbackProcess;
+            fallbackProcess.setProcessEnvironment(processEnvironment);
+            fallbackProcess.start(QStringLiteral("powershell"), fallbackArguments);
+            if ( !fallbackProcess.waitForStarted(readRgStartTimeoutMs) )
             {
-                *error = QStringLiteral("file.read rg timed out");
+                if ( error != nullptr )
+                {
+                    const QString startError = fallbackProcess.errorString().trimmed();
+                    *error = startError.isEmpty()
+                        ? QStringLiteral("file.read rg fallback failed to start")
+                        : QStringLiteral("file.read rg fallback failed to start: %1").arg(startError);
+                }
+                return false;
             }
-            return false;
+
+            if ( !fallbackProcess.waitForFinished(rgTimeoutMs) )
+            {
+                fallbackProcess.kill();
+                fallbackProcess.waitForFinished(readRgKillWaitTimeoutMs);
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.read rg fallback timed out");
+                }
+                return false;
+            }
+
+            if ( fallbackProcess.exitStatus() != QProcess::NormalExit )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.read rg fallback crashed");
+                }
+                return false;
+            }
+
+            searchExitCode = fallbackProcess.exitCode();
+            stdoutBytes = fallbackProcess.readAllStandardOutput();
+            stderrBytes = fallbackProcess.readAllStandardError();
+            const QString fallbackStderrText = QString::fromUtf8(stderrBytes).trimmed();
+            if ( searchExitCode != 0 )
+            {
+                if ( error != nullptr )
+                {
+                    *error = fallbackStderrText.isEmpty()
+                        ? QStringLiteral("file.read rg fallback failed")
+                        : QStringLiteral("file.read rg fallback failed: %1").arg(fallbackStderrText);
+                }
+                return false;
+            }
         }
 
-        if ( process.exitStatus() != QProcess::NormalExit )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.read rg crashed");
-            }
-            return false;
-        }
-
-        const int rgExitCode = process.exitCode();
-        const QByteArray stdoutBytes = process.readAllStandardOutput();
-        const QByteArray stderrBytes = process.readAllStandardError();
-        const QString stderrText = QString::fromLocal8Bit(stderrBytes).trimmed();
-        if ( rgExitCode == 2 )
-        {
-            if ( error != nullptr )
-            {
-                *error = stderrText.isEmpty()
-                    ? QStringLiteral("file.read rg failed")
-                    : QStringLiteral("file.read rg failed: %1").arg(stderrText);
-            }
-            return false;
-        }
+        const QString stderrText = usePowerShellFallback
+            ? QString::fromUtf8(stderrBytes).trimmed()
+            : QString::fromLocal8Bit(stderrBytes).trimmed();
 
         QJsonArray matches;
         QSet<QString> matchedFiles;
         bool truncated = false;
-        const QList<QByteArray> outputLines = stdoutBytes.split('\n');
-        for ( const QByteArray &rawLine : outputLines )
+        if ( usePowerShellFallback )
         {
-            const QByteArray jsonLine = rawLine.trimmed();
-            if ( jsonLine.isEmpty() )
+            QJsonParseError fallbackParseError;
+            const QJsonDocument fallbackDocument =
+                QJsonDocument::fromJson(stdoutBytes, &fallbackParseError);
+            if ( fallbackParseError.error != QJsonParseError::NoError ||
+                 !fallbackDocument.isObject() )
             {
-                continue;
-            }
-
-            QJsonParseError jsonParseError;
-            const QJsonDocument jsonDocument =
-                QJsonDocument::fromJson(jsonLine, &jsonParseError);
-            if ( jsonParseError.error != QJsonParseError::NoError )
-            {
-                continue;
-            }
-            if ( !jsonDocument.isObject() )
-            {
-                continue;
-            }
-
-            const QJsonObject envelope = jsonDocument.object();
-            if ( envelope.value(QStringLiteral("type")).toString() != QStringLiteral("match") )
-            {
-                continue;
-            }
-
-            const QJsonObject data = envelope.value(QStringLiteral("data")).toObject();
-            QString matchPath =
-                data.value(QStringLiteral("path")).toObject()
-                    .value(QStringLiteral("text")).toString();
-            if ( matchPath.trimmed().isEmpty() )
-            {
-                matchPath = fileInfo.absoluteFilePath();
-            }
-            matchedFiles.insert(matchPath);
-
-            QString lineText =
-                data.value(QStringLiteral("lines")).toObject()
-                    .value(QStringLiteral("text")).toString();
-            while ( lineText.endsWith(QLatin1Char('\n')) ||
-                    lineText.endsWith(QLatin1Char('\r')) )
-            {
-                lineText.chop(1);
-            }
-            const int lineNumber = data.value(QStringLiteral("line_number")).toInt();
-            const QJsonArray submatches = data.value(QStringLiteral("submatches")).toArray();
-
-            if ( submatches.isEmpty() )
-            {
-                if ( matches.size() >= maxMatches )
+                if ( error != nullptr )
                 {
-                    truncated = true;
-                    continue;
+                    *error = QStringLiteral(
+                        "file.read rg fallback returned invalid JSON: %1"
+                    ).arg(fallbackParseError.errorString());
                 }
-
-                QJsonObject matchItem;
-                matchItem.insert(QStringLiteral("path"), matchPath);
-                matchItem.insert(QStringLiteral("lineNumber"), lineNumber);
-                matchItem.insert(QStringLiteral("columnStart"), 1);
-                matchItem.insert(QStringLiteral("columnEnd"), 1);
-                matchItem.insert(QStringLiteral("lineText"), lineText);
-                matchItem.insert(QStringLiteral("matchText"), QString());
-                matches.append(matchItem);
-                continue;
+                return false;
             }
 
-            for ( const QJsonValue &submatchValue : submatches )
+            const QJsonObject fallbackObject = fallbackDocument.object();
+            const QJsonArray fallbackMatches = fallbackObject.value(QStringLiteral("matches")).toArray();
+            for ( const QJsonValue &matchValue : fallbackMatches )
             {
                 if ( matches.size() >= maxMatches )
                 {
                     truncated = true;
                     break;
                 }
+                if ( !matchValue.isObject() )
+                {
+                    continue;
+                }
 
-                const QJsonObject submatch = submatchValue.toObject();
-                const int start = submatch.value(QStringLiteral("start")).toInt();
-                const int end = submatch.value(QStringLiteral("end")).toInt();
-                const QString matchText =
-                    submatch.value(QStringLiteral("match")).toObject()
-                        .value(QStringLiteral("text")).toString();
+                const QJsonObject fallbackMatch = matchValue.toObject();
+                QString matchPath = fallbackMatch.value(QStringLiteral("path")).toString().trimmed();
+                if ( matchPath.isEmpty() )
+                {
+                    matchPath = fileInfo.absoluteFilePath();
+                }
+                matchedFiles.insert(matchPath);
+
+                QString lineText = fallbackMatch.value(QStringLiteral("lineText")).toString();
+                while ( lineText.endsWith(QLatin1Char('\n')) ||
+                        lineText.endsWith(QLatin1Char('\r')) )
+                {
+                    lineText.chop(1);
+                }
+
+                int columnStart = fallbackMatch.value(QStringLiteral("columnStart")).toInt(1);
+                if ( columnStart <= 0 )
+                {
+                    columnStart = 1;
+                }
+                int columnEnd = fallbackMatch.value(QStringLiteral("columnEnd")).toInt(columnStart);
+                if ( columnEnd < columnStart )
+                {
+                    columnEnd = columnStart;
+                }
 
                 QJsonObject matchItem;
                 matchItem.insert(QStringLiteral("path"), matchPath);
-                matchItem.insert(QStringLiteral("lineNumber"), lineNumber);
-                matchItem.insert(QStringLiteral("columnStart"), start + 1);
-                matchItem.insert(QStringLiteral("columnEnd"), end);
+                matchItem.insert(QStringLiteral("lineNumber"), fallbackMatch.value(QStringLiteral("lineNumber")).toInt());
+                matchItem.insert(QStringLiteral("columnStart"), columnStart);
+                matchItem.insert(QStringLiteral("columnEnd"), columnEnd);
                 matchItem.insert(QStringLiteral("lineText"), lineText);
-                matchItem.insert(QStringLiteral("matchText"), matchText);
+                matchItem.insert(QStringLiteral("matchText"), fallbackMatch.value(QStringLiteral("matchText")).toString());
                 matches.append(matchItem);
+            }
+
+            if ( fallbackObject.value(QStringLiteral("truncated")).toBool() )
+            {
+                truncated = true;
+            }
+        }
+        else
+        {
+            const QList<QByteArray> outputLines = stdoutBytes.split('\n');
+            for ( const QByteArray &rawLine : outputLines )
+            {
+                const QByteArray jsonLine = rawLine.trimmed();
+                if ( jsonLine.isEmpty() )
+                {
+                    continue;
+                }
+
+                QJsonParseError jsonParseError;
+                const QJsonDocument jsonDocument =
+                    QJsonDocument::fromJson(jsonLine, &jsonParseError);
+                if ( jsonParseError.error != QJsonParseError::NoError )
+                {
+                    continue;
+                }
+                if ( !jsonDocument.isObject() )
+                {
+                    continue;
+                }
+
+                const QJsonObject envelope = jsonDocument.object();
+                if ( envelope.value(QStringLiteral("type")).toString() != QStringLiteral("match") )
+                {
+                    continue;
+                }
+
+                const QJsonObject data = envelope.value(QStringLiteral("data")).toObject();
+                QString matchPath =
+                    data.value(QStringLiteral("path")).toObject()
+                        .value(QStringLiteral("text")).toString();
+                if ( matchPath.trimmed().isEmpty() )
+                {
+                    matchPath = fileInfo.absoluteFilePath();
+                }
+                matchedFiles.insert(matchPath);
+
+                QString lineText =
+                    data.value(QStringLiteral("lines")).toObject()
+                        .value(QStringLiteral("text")).toString();
+                while ( lineText.endsWith(QLatin1Char('\n')) ||
+                        lineText.endsWith(QLatin1Char('\r')) )
+                {
+                    lineText.chop(1);
+                }
+                const int lineNumber = data.value(QStringLiteral("line_number")).toInt();
+                const QJsonArray submatches = data.value(QStringLiteral("submatches")).toArray();
+
+                if ( submatches.isEmpty() )
+                {
+                    if ( matches.size() >= maxMatches )
+                    {
+                        truncated = true;
+                        continue;
+                    }
+
+                    QJsonObject matchItem;
+                    matchItem.insert(QStringLiteral("path"), matchPath);
+                    matchItem.insert(QStringLiteral("lineNumber"), lineNumber);
+                    matchItem.insert(QStringLiteral("columnStart"), 1);
+                    matchItem.insert(QStringLiteral("columnEnd"), 1);
+                    matchItem.insert(QStringLiteral("lineText"), lineText);
+                    matchItem.insert(QStringLiteral("matchText"), QString());
+                    matches.append(matchItem);
+                    continue;
+                }
+
+                for ( const QJsonValue &submatchValue : submatches )
+                {
+                    if ( matches.size() >= maxMatches )
+                    {
+                        truncated = true;
+                        break;
+                    }
+
+                    const QJsonObject submatch = submatchValue.toObject();
+                    const int start = submatch.value(QStringLiteral("start")).toInt();
+                    const int end = submatch.value(QStringLiteral("end")).toInt();
+                    const QString matchText =
+                        submatch.value(QStringLiteral("match")).toObject()
+                            .value(QStringLiteral("text")).toString();
+
+                    QJsonObject matchItem;
+                    matchItem.insert(QStringLiteral("path"), matchPath);
+                    matchItem.insert(QStringLiteral("lineNumber"), lineNumber);
+                    matchItem.insert(QStringLiteral("columnStart"), start + 1);
+                    matchItem.insert(QStringLiteral("columnEnd"), end);
+                    matchItem.insert(QStringLiteral("lineText"), lineText);
+                    matchItem.insert(QStringLiteral("matchText"), matchText);
+                    matches.append(matchItem);
+                }
             }
         }
 
@@ -1706,7 +2061,8 @@ bool FileReadAccess::read(
         out.insert(QStringLiteral("matchCount"), matches.size());
         out.insert(QStringLiteral("fileCount"), matchedFiles.size());
         out.insert(QStringLiteral("truncated"), truncated);
-        out.insert(QStringLiteral("rgExitCode"), rgExitCode);
+        out.insert(QStringLiteral("searchBackend"), searchBackend);
+        out.insert(QStringLiteral("searchExitCode"), searchExitCode);
         if ( !stderrText.isEmpty() )
         {
             out.insert(QStringLiteral("stderr"), stderrText);
@@ -1715,12 +2071,13 @@ bool FileReadAccess::read(
 
         *result = out;
         qInfo().noquote() << QStringLiteral(
-            "[capability.file.read] rg done path=%1 matches=%2 files=%3 exitCode=%4"
+            "[capability.file.read] rg done path=%1 backend=%2 matches=%3 files=%4 exitCode=%5"
         ).arg(
             fileInfo.absoluteFilePath(),
+            searchBackend,
             QString::number(matches.size()),
             QString::number(matchedFiles.size()),
-            QString::number(rgExitCode)
+            QString::number(searchExitCode)
         );
         return true;
     }
@@ -1886,5 +2243,3 @@ bool FileReadAccess::read(
     );
     return true;
 }
-
-

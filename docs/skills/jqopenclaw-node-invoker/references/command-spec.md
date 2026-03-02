@@ -207,7 +207,8 @@
   - `matchCount`
   - `fileCount`
   - `truncated`
-  - `rgExitCode`
+  - `searchBackend`（`rg` 或 `powershell.select-string`）
+  - `searchExitCode`
   - `stderr`（可选）
   - `matches`（数组元素字段：`path`、`lineNumber`、`columnStart`、`columnEnd`、`lineText`、`matchText`）
 - `stat` 模式字段：
