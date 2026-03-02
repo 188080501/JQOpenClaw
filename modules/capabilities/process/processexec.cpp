@@ -452,9 +452,9 @@ bool ProcessExec::execute(
         return false;
     }
 
-    if ( invokeTimeoutMs > 0 )
+    if ( invokeTimeoutMs >= 0 )
     {
-        timeoutMs = qMax(1, qMin(timeoutMs, invokeTimeoutMs));
+        timeoutMs = qMin(timeoutMs, invokeTimeoutMs);
     }
 
     qInfo().noquote() << QStringLiteral(

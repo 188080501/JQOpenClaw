@@ -23,8 +23,10 @@
 - 每次请求使用新 UUID 作为 `idempotencyKey`。
 - 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。
 - `paramsJSON` 缺失或 `null` 时按空对象处理；若存在但不是字符串、为空字符串、或解析后不是对象，返回 `INVALID_PARAMS`。
-- `node.invoke.params.timeoutMs` 可省略；若传入，必须为正整数（毫秒），否则返回 `INVALID_PARAMS`。
-- `node.invoke.params.timeoutMs` 作为本次请求总预算。节点内部会将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值）。
+- `node.invoke.params.timeoutMs` 可省略；若传入，必须为非负整数（毫秒），否则返回 `INVALID_PARAMS`。其中 `0` 视为立即超时。
+- `node.invoke.params.timeoutMs` 会参与请求预算裁剪。节点内部会将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值）。
+- 即便省略 `node.invoke.params.timeoutMs`，网关/调用端仍存在等待超时（当前 OpenClaw 侧常见默认约 `30000ms`，CLI `openclaw nodes invoke` 默认 `15000ms`）。
+- 实际可用执行时长取决于最先触发的超时层：调用端/网关等待超时、`node.invoke.params.timeoutMs`（若传入）、能力内部超时。
 
 ## 2. file.read
 
@@ -45,7 +47,7 @@
   - `caseSensitive`：布尔，可选，默认 `false`。
   - `includeHidden`：布尔，可选，默认 `false`。
   - `literal`：布尔，可选，默认 `false`（固定字符串匹配）。
-  - 内部执行超时：默认 `60000ms`，若 `node.invoke.timeoutMs > 0`，实际超时为二者较小值。
+  - 内部执行超时：默认 `60000ms`，若设置了 `node.invoke.timeoutMs`（含 `0`），实际超时为二者较小值。
 
 示例：
 
@@ -256,7 +258,7 @@
 - `inheritEnvironment`：布尔，可选，默认 `true`。
 - `environment`：对象，可选，键和值都必须是字符串。
 - `mergeChannels`：布尔，可选，默认 `false`。
-- 超时裁剪：若 `node.invoke.timeoutMs > 0`，实际执行超时为 `min(process.exec.params.timeoutMs, node.invoke.timeoutMs)`。
+- 超时裁剪：若设置了 `node.invoke.timeoutMs`（含 `0`），实际执行超时为 `min(process.exec.params.timeoutMs, node.invoke.timeoutMs)`。
 
 示例（program 模式）：
 
@@ -350,7 +352,7 @@
   - 截图已采集但全部上传失败。
 
 - `TIMEOUT`
-  - `node.invoke` 请求级超时（网关等待节点结果超时）。
+  - `node.invoke` 请求级超时（网关等待节点结果超时），或显式传入 `timeoutMs=0` 导致立即超时。
   - 增大 `timeoutMs` 或缩小执行范围。
 
 - `COMMAND_NOT_SUPPORTED`

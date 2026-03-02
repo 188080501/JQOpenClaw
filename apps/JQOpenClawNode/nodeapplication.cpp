@@ -280,18 +280,18 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("timeoutMs must be positive integer");
+            *error = QStringLiteral("timeoutMs must be non-negative integer");
         }
         return false;
     }
 
     const double rawTimeoutMs = timeoutValue.toDouble();
-    if ( ( rawTimeoutMs < 1.0 ) ||
+    if ( ( rawTimeoutMs < 0.0 ) ||
          ( rawTimeoutMs > static_cast<double>(std::numeric_limits<int>::max()) ) )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("timeoutMs must be positive integer");
+            *error = QStringLiteral("timeoutMs must be non-negative integer");
         }
         return false;
     }
@@ -301,7 +301,7 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("timeoutMs must be positive integer");
+            *error = QStringLiteral("timeoutMs must be non-negative integer");
         }
         return false;
     }
@@ -476,6 +476,20 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
             nodeId,
             QStringLiteral("INVALID_PARAMS"),
             parseError
+        );
+        return;
+    }
+
+    if ( invokeTimeoutMs == 0 )
+    {
+        qWarning().noquote() << QStringLiteral(
+            "[node.invoke] timeout immediately id=%1 command=%2"
+        ).arg(invokeId, command);
+        sendInvokeError(
+            invokeId,
+            nodeId,
+            QStringLiteral("TIMEOUT"),
+            QStringLiteral("node invoke timed out")
         );
         return;
     }

@@ -706,9 +706,9 @@ bool FileReadAccess::read(
         rgArguments << pattern << fileInfo.absoluteFilePath();
 
         int rgTimeoutMs = readRgTimeoutMs;
-        if ( invokeTimeoutMs > 0 )
+        if ( invokeTimeoutMs >= 0 )
         {
-            rgTimeoutMs = qMax(1, qMin(readRgTimeoutMs, invokeTimeoutMs));
+            rgTimeoutMs = qMin(readRgTimeoutMs, invokeTimeoutMs);
         }
 
         qInfo().noquote() << QStringLiteral(
