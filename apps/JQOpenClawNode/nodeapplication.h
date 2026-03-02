@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 #include <QSystemTrayIcon>
+#include <QTimer>
 
 // JQOpenClaw import
 #include "crypto/deviceidentity/deviceidentity.h"
@@ -36,6 +37,7 @@ private:
     {
         Disconnected,
         Connecting,
+        Pairing,
         Connected,
         Error
     };
@@ -53,6 +55,9 @@ private:
     void onInvokeRequestReceived(const QJsonObject &payload);
     void onTransportError(const QString &message);
     void onGatewayClosed();
+    void onPairingReconnectTimeout();
+    void startPairingReconnect();
+    void stopPairingReconnect();
 
     bool runCryptoSelfTest(QString *error) const;
     bool parseInvokeParamsJson(
@@ -91,6 +96,7 @@ private:
     bool registered_ = false;
     ConnectionState connectionState_ = ConnectionState::Disconnected;
     QString connectionStateDetail_;
+    QTimer pairingReconnectTimer_;
 };
 
 #endif // JQOPENCLAW_APPS_JQOPENCLAWNODE_NODEAPPLICATION_H_

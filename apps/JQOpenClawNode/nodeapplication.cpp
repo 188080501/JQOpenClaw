@@ -38,6 +38,8 @@
 
 namespace
 {
+constexpr int kPairingReconnectIntervalMs = 15000;
+
 QString extractString(const QJsonObject &object, const QString &key)
 {
     const QJsonValue value = object.value(key);
@@ -325,8 +327,12 @@ NodeApplication::NodeApplication(const NodeOptions &options, QObject *parent) :
     QObject(parent),
     options_(options),
     gatewayClient_(this),
-    registrar_(options)
+    registrar_(options),
+    pairingReconnectTimer_(this)
 {
+    pairingReconnectTimer_.setInterval(kPairingReconnectIntervalMs);
+    pairingReconnectTimer_.setSingleShot(false);
+
     connect(
         &gatewayClient_,
         &GatewayClient::challengeReceived,
@@ -362,6 +368,12 @@ NodeApplication::NodeApplication(const NodeOptions &options, QObject *parent) :
         &GatewayClient::closed,
         this,
         &NodeApplication::onGatewayClosed
+    );
+    connect(
+        &pairingReconnectTimer_,
+        &QTimer::timeout,
+        this,
+        &NodeApplication::onPairingReconnectTimeout
     );
 }
 
@@ -433,6 +445,9 @@ void NodeApplication::updateConnectionStatusAction()
         case ConnectionState::Connecting:
             color = QStringLiteral("#b45309");
             break;
+        case ConnectionState::Pairing:
+            color = QStringLiteral("#2563eb");
+            break;
         case ConnectionState::Connected:
             color = QStringLiteral("#15803d");
             break;
@@ -455,7 +470,8 @@ void NodeApplication::updateConnectionStatusAction()
         const QString detailText = connectionStateDetail_.trimmed();
         QString trayToolTip = QStringLiteral("JQOpenClawNode\n连接状态：%1")
             .arg(statusText);
-        if ( !detailText.isEmpty() )
+        if ( ( connectionState_ != ConnectionState::Pairing ) &&
+             !detailText.isEmpty() )
         {
             trayToolTip.append(
                 QStringLiteral("\n详情：%1").arg(detailText.left(120))
@@ -473,6 +489,8 @@ QString NodeApplication::connectionStateDisplayText() const
         return QStringLiteral("未连接");
     case ConnectionState::Connecting:
         return QStringLiteral("连接中");
+    case ConnectionState::Pairing:
+        return QStringLiteral("配对中");
     case ConnectionState::Connected:
         return QStringLiteral("已连接");
     case ConnectionState::Error:
@@ -533,6 +551,7 @@ void NodeApplication::onExitActionTriggered()
 void NodeApplication::start()
 {
     initializeSystemTray();
+    stopPairingReconnect();
     connectionState_ = ConnectionState::Connecting;
     connectionStateDetail_.clear();
     updateConnectionStatusAction();
@@ -590,6 +609,7 @@ void NodeApplication::onChallengeReceived(const QString &nonce)
 
 void NodeApplication::onConnectAccepted(const QJsonObject &payload)
 {
+    stopPairingReconnect();
     registered_ = true;
     connectionState_ = ConnectionState::Connected;
     connectionStateDetail_.clear();
@@ -615,11 +635,11 @@ void NodeApplication::onConnectAccepted(const QJsonObject &payload)
 void NodeApplication::onConnectRejected(const QJsonObject &error)
 {
     const QString message = parseErrorMessage(error);
-    connectionState_ = ConnectionState::Error;
+    connectionState_ = ConnectionState::Pairing;
     connectionStateDetail_ = message;
     updateConnectionStatusAction();
-    qCritical().noquote() << QStringLiteral("gateway connect rejected: %1").arg(message);
-    emit finished(2);
+    qWarning().noquote() << QStringLiteral("gateway connect rejected, waiting for pairing: %1").arg(message);
+    startPairingReconnect();
 }
 
 void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
@@ -716,18 +736,42 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 
 void NodeApplication::onTransportError(const QString &message)
 {
-    connectionState_ = ConnectionState::Error;
-    connectionStateDetail_ = message.trimmed();
-    updateConnectionStatusAction();
+    const bool pairingInProgress = ( connectionState_ == ConnectionState::Pairing );
+    if ( !pairingInProgress )
+    {
+        connectionState_ = ConnectionState::Error;
+        connectionStateDetail_ = message.trimmed();
+        updateConnectionStatusAction();
+    }
+    else
+    {
+        connectionStateDetail_ = QStringLiteral("等待配对完成");
+        updateConnectionStatusAction();
+    }
+
     qCritical().noquote() << message;
     if ( !registered_ )
     {
+        if ( pairingInProgress )
+        {
+            qInfo().noquote() << QStringLiteral("transport error while pairing, keep process alive");
+            return;
+        }
         emit finished(1);
     }
 }
 
 void NodeApplication::onGatewayClosed()
 {
+    if ( connectionState_ == ConnectionState::Pairing )
+    {
+        connectionStateDetail_ = QStringLiteral("等待配对完成");
+        updateConnectionStatusAction();
+        qInfo().noquote() << QStringLiteral("gateway closed while pairing, keep process alive");
+        return;
+    }
+
+    stopPairingReconnect();
     connectionState_ = ConnectionState::Disconnected;
     connectionStateDetail_ = QStringLiteral("网关连接已关闭");
     updateConnectionStatusAction();
@@ -742,6 +786,53 @@ void NodeApplication::onGatewayClosed()
     {
         emit finished(3);
     }
+}
+
+void NodeApplication::onPairingReconnectTimeout()
+{
+    if ( connectionState_ != ConnectionState::Pairing )
+    {
+        stopPairingReconnect();
+        return;
+    }
+
+    qInfo().noquote() << QStringLiteral(
+        "pairing reconnect tick, retry gateway connection in %1 ms"
+    ).arg(kPairingReconnectIntervalMs);
+    gatewayClient_.close();
+    QTimer::singleShot(
+        200,
+        this,
+        [this]()
+        {
+            if ( connectionState_ == ConnectionState::Pairing )
+            {
+                gatewayClient_.open();
+            }
+        }
+    );
+}
+
+void NodeApplication::startPairingReconnect()
+{
+    if ( pairingReconnectTimer_.isActive() )
+    {
+        return;
+    }
+    pairingReconnectTimer_.start();
+    qInfo().noquote() << QStringLiteral(
+        "pairing reconnect timer started, interval=%1 ms"
+    ).arg(kPairingReconnectIntervalMs);
+}
+
+void NodeApplication::stopPairingReconnect()
+{
+    if ( !pairingReconnectTimer_.isActive() )
+    {
+        return;
+    }
+    pairingReconnectTimer_.stop();
+    qInfo().noquote() << QStringLiteral("pairing reconnect timer stopped");
 }
 
 bool NodeApplication::runCryptoSelfTest(QString *error) const
