@@ -24,7 +24,7 @@
 - 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。
 - `paramsJSON` 缺失或 `null` 时按空对象处理；若存在但不是字符串、为空字符串、或解析后不是对象，返回 `INVALID_PARAMS`。
 - `node.invoke.params.timeoutMs` 可省略；若传入，必须为非负整数（毫秒），否则返回 `INVALID_PARAMS`。其中 `0` 视为立即超时。
-- `node.invoke.params.timeoutMs` 会参与请求预算裁剪。节点内部会将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值）。
+- `node.invoke.params.timeoutMs` 会参与请求预算裁剪。当前节点内部仅将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值）。
 - 即便省略 `node.invoke.params.timeoutMs`，网关/调用端仍存在等待超时（当前 OpenClaw 侧常见默认约 `30000ms`，CLI `openclaw nodes invoke` 默认 `15000ms`）。
 - 实际可用执行时长取决于最先触发的超时层：调用端/网关等待超时、`node.invoke.params.timeoutMs`（若传入）、能力内部超时。
 
@@ -392,7 +392,86 @@
 - `resultClass=timeout`（或 `timedOut=true`）时，`node.invoke` 仍返回成功结构，调用方应按业务将其视为超时失败。
 - 无进程级错误时，不返回 `processError*` 字段。
 
-## 5. system.screenshot
+## 5. process.manage
+
+用途：进程管理（当前仅支持 Windows），支持进程列表、搜索和终止。
+
+`params`：
+- `operation`：字符串，可选，默认 `list`。可选值：`list` / `search` / `kill`。
+- `list` 与 `search` 通用参数：
+  - `query`：字符串，可选。搜索关键字。
+  - `keyword`：字符串，可选。`query` 的兼容别名（仅在 `query` 为空时生效）。
+  - `pid`：数字，可选，范围 `[1, 2147483647]`。作为 PID 精确过滤条件。
+  - `caseSensitive`：布尔，可选，默认 `false`。
+  - `limit`：数字，可选，默认 `200`，范围 `[1, 5000]`。
+  - `includePath`：布尔，可选，默认 `false`。是否返回进程路径，并允许 `query` 匹配路径。
+  - `includeArchitecture`：布尔，可选，默认 `false`。是否返回 `isWow64` 字段（Windows）。
+- `search` 额外约束：
+  - 必须提供 `query`（或 `keyword`）与 `pid` 之一，否则返回 `INVALID_PARAMS`。
+- `kill` 参数：
+  - `pid`：数字，必填，范围 `[1, 2147483647]`。
+  - `waitMs`：数字，可选，默认 `3000`，范围 `[0, 30000]`。
+  - 注意：`waitMs` 当前不会被 `node.invoke.timeoutMs` 二次裁剪，调用端应自行保证请求预算充足。
+  - 默认拒绝终止关键进程（critical process）；仅当 `pid` 等于当前节点进程 PID 时允许。
+
+示例（search 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "process.manage",
+    "params": {
+      "operation": "search",
+      "query": "chrome",
+      "limit": 20,
+      "includePath": true
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
+示例（kill 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "process.manage",
+    "params": {
+      "operation": "kill",
+      "pid": 12345,
+      "waitMs": 5000
+    },
+    "timeoutMs": 10000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
+返回重点（payload）：
+- `list` / `search` 返回字段：
+  - `operation` / `query`（可选）/ `pid`（可选）/ `caseSensitive` / `limit`
+  - `includePath` / `includeArchitecture`
+  - `returnedCount` / `totalMatched` / `truncated`
+  - `processes`：数组元素字段包含
+    - `pid`
+    - `name`
+    - `sessionId`（可选）
+    - `path`（可选）
+    - `isWow64`（可选）
+- `kill` 返回字段：
+  - `operation` / `pid`
+  - `name`（可选）/ `path`（可选）/ `isWow64`（可选）
+  - `waitMs` / `waitResult` / `terminated` / `exited` / `resultClass`
+  - `exitCode`（可选）
+  - `waitResult` 取值：`signaled` / `timeout` / `abandoned` / `unknown`。
+
+## 6. system.screenshot
 
 用途：采集全部屏幕截图并返回上传后的 URL 信息。
 
@@ -405,7 +484,7 @@
 - `screenIndex`
 - `screenName`（可选）
 
-## 6. system.info
+## 7. system.info
 
 用途：采集系统基础信息。
 
@@ -423,15 +502,19 @@
 - `ip`
 - `disks`
 
-## 7. 常见错误与处理
+## 8. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.exec` 参数校验失败）。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` 参数校验失败）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
   - 常见原因：路径错误、权限不足、父目录不存在、移动目标已存在、系统回收站不可用或拒绝接收目标。
   - 优先检查路径、权限、目录状态、回收站状态等执行环境问题。
+
+- `PROCESS_MANAGE_FAILED`
+  - 常见原因：目标进程不存在、权限不足、非 Windows 平台、命中关键进程保护、终止失败或等待失败。
+  - 优先检查 `pid`、节点运行权限、平台类型与目标进程存活状态。
 
 - `PROCESS_EXEC_FAILED`
   - 常见原因：程序不存在、权限不足、启动失败等无法产出结构化执行结果。

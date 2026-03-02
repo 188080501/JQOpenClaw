@@ -20,6 +20,7 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 | --- | --- | --- |
 | `file` | `file.read` | 支持 `operation=read/lines/list/rg/stat`：文件读取（含 `offsetBytes` 分块）、按行区间读取（`startLine~endLine`）、目录遍历（含 `recursive/glob`）与元信息查询（owner/权限/时间戳）。 |
 | `file` | `file.write` | 支持写入/移动（剪切）/删除（回收站）/目录创建/目录删除，以及 `operation=write/move/delete/mkdir/rmdir`、`createDirs/overwrite` 参数。 |
+| `process` | `process.manage` | 进程管理能力，支持 `operation=list/search/kill`：进程列表、按关键字或 PID 搜索、按 PID 终止进程。 |
 | `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 `exitCode/stdout/stderr` 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
 | `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名/主机名、系统名称/版本、用户名、内存、GPU、IP、硬盘容量）。 |
@@ -29,6 +30,8 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 - 统一通过 Gateway `node.invoke` 调用节点命令。
 - 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。
 - 参数缺失、类型不匹配、超出范围等参数校验失败统一返回 `INVALID_PARAMS`。
+- `process.manage` 当前仅支持 Windows；非 Windows 环境会返回 `PROCESS_MANAGE_FAILED`。
+- `process.manage(operation=kill)` 默认拒绝终止关键进程（critical process）；仅当目标 PID 为当前节点进程时允许。
 
 ## 运行参数
 
@@ -69,7 +72,7 @@ JQOpenClaw
 ├─ apps/JQOpenClawNode/          # Node 应用入口与命令分发
 ├─ modules/openclawprotocol/     # 网关握手与 caps/commands/permissions 声明
 ├─ modules/capabilities/file/    # file 能力实现（file.read / file.write：写入/移动/删除/目录增删）
-├─ modules/capabilities/process/ # process 能力实现（process.exec）
+├─ modules/capabilities/process/ # process 能力实现（process.manage / process.exec）
 ├─ modules/capabilities/system/  # system 能力实现（system.screenshot / system.info）
 ├─ modules/crypto/               # 设备身份、签名与加解密相关能力
 └─ docs/                         # 项目依赖与部署文档

@@ -30,6 +30,7 @@
 // JQOpenClaw import
 #include "capabilities/file/fileaccessread.h"
 #include "capabilities/file/fileaccesswrite.h"
+#include "capabilities/process/processmanage.h"
 #include "capabilities/process/processexec.h"
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
@@ -1360,6 +1361,37 @@ bool NodeApplication::executeInvokeCommand(
         }
 
         *payload = executeResult;
+        return true;
+    }
+
+    if ( command == QStringLiteral("process.manage") )
+    {
+        QJsonObject manageResult;
+        QString manageError;
+        bool invalidParams = false;
+        if ( !ProcessManage::execute(
+                params,
+                &manageResult,
+                &manageError,
+                &invalidParams
+            ) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("PROCESS_MANAGE_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = manageError.isEmpty()
+                    ? QStringLiteral("failed to manage process")
+                    : manageError;
+            }
+            return false;
+        }
+
+        *payload = manageResult;
         return true;
     }
 
