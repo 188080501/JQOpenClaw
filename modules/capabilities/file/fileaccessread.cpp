@@ -3,9 +3,12 @@
 
 // Qt lib import
 #include <QByteArray>
+#include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
+#include <QFileDevice>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -13,11 +16,15 @@
 #include <QProcess>
 #include <QSet>
 #include <QtGlobal>
+#include <algorithm>
+#include <limits>
 
 namespace
 {
 const qint64 defaultReadMaxBytes = 1024 * 1024;
 const qint64 maxReadMaxBytes = 20 * 1024 * 1024;
+const qint64 defaultReadChunkBytes = 256 * 1024;
+const qint64 maxReadLineSpan = 50000;
 const qint64 defaultReadMaxEntries = 200;
 const qint64 maxReadMaxEntries = 5000;
 const qint64 defaultRgMaxMatches = 200;
@@ -35,8 +42,10 @@ enum class ContentEncoding
 enum class FileReadOperation
 {
     Read,
+    Lines,
     List,
     Rg,
+    Stat,
 };
 
 QString extractString(const QJsonObject &object, const QString &key)
@@ -109,10 +118,14 @@ QString fileReadOperationName(FileReadOperation operation)
     {
     case FileReadOperation::Read:
         return QStringLiteral("read");
+    case FileReadOperation::Lines:
+        return QStringLiteral("lines");
     case FileReadOperation::List:
         return QStringLiteral("list");
     case FileReadOperation::Rg:
         return QStringLiteral("rg");
+    case FileReadOperation::Stat:
+        return QStringLiteral("stat");
     }
     return QStringLiteral("read");
 }
@@ -153,6 +166,13 @@ bool parseReadOperation(
         *operation = FileReadOperation::Read;
         return true;
     }
+    if ( ( normalized == QStringLiteral("lines") ) ||
+         ( normalized == QStringLiteral("readlines") ) ||
+         ( normalized == QStringLiteral("lineread") ) )
+    {
+        *operation = FileReadOperation::Lines;
+        return true;
+    }
     if ( normalized == QStringLiteral("list") )
     {
         *operation = FileReadOperation::List;
@@ -163,10 +183,15 @@ bool parseReadOperation(
         *operation = FileReadOperation::Rg;
         return true;
     }
+    if ( normalized == QStringLiteral("stat") )
+    {
+        *operation = FileReadOperation::Stat;
+        return true;
+    }
 
     if ( error != nullptr )
     {
-        *error = QStringLiteral("operation must be read, list, or rg");
+        *error = QStringLiteral("operation must be read, lines, list, rg, or stat");
     }
     return false;
 }
@@ -204,6 +229,482 @@ bool parseOptionalBool(
 
     *out = value.toBool();
     return true;
+}
+
+bool parseIntegerField(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    qint64 defaultValue,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 *out,
+    QString *error
+)
+{
+    if ( out == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file capability internal error: integer output pointer is null");
+        }
+        return false;
+    }
+
+    *out = defaultValue;
+    const QJsonValue value = paramsObject.value(field);
+    if ( value.isUndefined() || value.isNull() )
+    {
+        return true;
+    }
+    if ( !value.isDouble() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("%1 must be number").arg(field);
+        }
+        return false;
+    }
+
+    const double raw = value.toDouble();
+    if ( ( raw < static_cast<double>(minValue) ) ||
+         ( raw > static_cast<double>(maxValue) ) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "%1 must be integer within [%2, %3]"
+            ).arg(field).arg(minValue).arg(maxValue);
+        }
+        return false;
+    }
+
+    const qint64 parsed = static_cast<qint64>(raw);
+    if ( raw != static_cast<double>(parsed) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "%1 must be integer within [%2, %3]"
+            ).arg(field).arg(minValue).arg(maxValue);
+        }
+        return false;
+    }
+
+    *out = parsed;
+    return true;
+}
+
+bool parseReadOffsetBytes(
+    const QJsonObject &paramsObject,
+    qint64 *offsetBytes,
+    QString *error
+)
+{
+    if ( offsetBytes == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file capability internal error: offsetBytes output pointer is null");
+        }
+        return false;
+    }
+
+    if ( !parseIntegerField(
+            paramsObject,
+            QStringLiteral("offsetBytes"),
+            0,
+            0,
+            std::numeric_limits<qint64>::max(),
+            offsetBytes,
+            error
+        ) )
+    {
+        return false;
+    }
+
+    const QJsonValue offsetAlias = paramsObject.value(QStringLiteral("offset"));
+    if ( !offsetAlias.isUndefined() && !offsetAlias.isNull() )
+    {
+        if ( !offsetAlias.isDouble() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("offset must be number");
+            }
+            return false;
+        }
+
+        const double raw = offsetAlias.toDouble();
+        if ( ( raw < 0.0 ) ||
+             ( raw > static_cast<double>(std::numeric_limits<qint64>::max()) ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "offset must be integer within [0, %1]"
+                ).arg(std::numeric_limits<qint64>::max());
+            }
+            return false;
+        }
+
+        const qint64 parsed = static_cast<qint64>(raw);
+        if ( raw != static_cast<double>(parsed) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "offset must be integer within [0, %1]"
+                ).arg(std::numeric_limits<qint64>::max());
+            }
+            return false;
+        }
+
+        *offsetBytes = parsed;
+    }
+
+    return true;
+}
+
+bool parseReadLineBoundary(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    qint64 *lineValue,
+    QString *error
+)
+{
+    if ( lineValue == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file capability internal error: lineValue output pointer is null");
+        }
+        return false;
+    }
+
+    const QJsonValue primaryValue = paramsObject.value(primaryField);
+    const QJsonValue aliasValue = paramsObject.value(aliasField);
+    const bool hasPrimary = !primaryValue.isUndefined() && !primaryValue.isNull();
+    const bool hasAlias = !aliasValue.isUndefined() && !aliasValue.isNull();
+    if ( !hasPrimary && !hasAlias )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("%1 is required").arg(primaryField);
+        }
+        return false;
+    }
+
+    const QJsonValue targetValue = hasPrimary ? primaryValue : aliasValue;
+    const QString valueField = hasPrimary ? primaryField : aliasField;
+    if ( !targetValue.isDouble() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("%1 must be number").arg(valueField);
+        }
+        return false;
+    }
+
+    const double raw = targetValue.toDouble();
+    if ( ( raw < 1.0 ) ||
+         ( raw > static_cast<double>(std::numeric_limits<qint64>::max()) ) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "%1 must be integer within [1, %2]"
+            ).arg(valueField).arg(std::numeric_limits<qint64>::max());
+        }
+        return false;
+    }
+
+    const qint64 parsed = static_cast<qint64>(raw);
+    if ( raw != static_cast<double>(parsed) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "%1 must be integer within [1, %2]"
+            ).arg(valueField).arg(std::numeric_limits<qint64>::max());
+        }
+        return false;
+    }
+
+    *lineValue = parsed;
+    return true;
+}
+
+bool parseGlobPatterns(
+    const QJsonObject &paramsObject,
+    QStringList *globPatterns,
+    QString *error
+)
+{
+    if ( globPatterns == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file capability internal error: globPatterns output pointer is null");
+        }
+        return false;
+    }
+
+    globPatterns->clear();
+
+    const QJsonValue globValue = paramsObject.value(QStringLiteral("glob"));
+    if ( globValue.isString() )
+    {
+        const QString pattern = globValue.toString().trimmed();
+        if ( !pattern.isEmpty() )
+        {
+            globPatterns->append(pattern);
+        }
+    }
+    else if ( globValue.isArray() )
+    {
+        const QJsonArray patterns = globValue.toArray();
+        for ( const QJsonValue &patternValue : patterns )
+        {
+            if ( !patternValue.isString() )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("glob array item must be string");
+                }
+                return false;
+            }
+
+            const QString pattern = patternValue.toString().trimmed();
+            if ( !pattern.isEmpty() )
+            {
+                globPatterns->append(pattern);
+            }
+        }
+    }
+    else if ( !globValue.isUndefined() && !globValue.isNull() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("glob must be string or string array");
+        }
+        return false;
+    }
+
+    const QJsonValue globPatternsValue = paramsObject.value(QStringLiteral("globPatterns"));
+    if ( !globPatternsValue.isUndefined() && !globPatternsValue.isNull() )
+    {
+        if ( !globPatternsValue.isArray() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("globPatterns must be string array");
+            }
+            return false;
+        }
+
+        const QJsonArray patterns = globPatternsValue.toArray();
+        for ( const QJsonValue &patternValue : patterns )
+        {
+            if ( !patternValue.isString() )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("globPatterns array item must be string");
+                }
+                return false;
+            }
+
+            const QString pattern = patternValue.toString().trimmed();
+            if ( !pattern.isEmpty() )
+            {
+                globPatterns->append(pattern);
+            }
+        }
+    }
+
+    return true;
+}
+
+QString fileTargetType(const QFileInfo &fileInfo)
+{
+    if ( fileInfo.isDir() )
+    {
+        return QStringLiteral("directory");
+    }
+    if ( fileInfo.isFile() )
+    {
+        return QStringLiteral("file");
+    }
+    return QStringLiteral("other");
+}
+
+QString normalizedRelativePath(const QDir &rootDir, const QFileInfo &entryInfo)
+{
+    QString relativePath = rootDir.relativeFilePath(entryInfo.absoluteFilePath());
+    relativePath.replace('\\', '/');
+    return relativePath;
+}
+
+bool matchesGlobPatterns(
+    const QStringList &globPatterns,
+    const QString &relativePath,
+    const QString &fileName
+)
+{
+    if ( globPatterns.isEmpty() )
+    {
+        return true;
+    }
+
+    for ( const QString &pattern : globPatterns )
+    {
+        if ( QDir::match(pattern, relativePath) ||
+             QDir::match(pattern, fileName) )
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void appendTimestamp(
+    QJsonObject *timestamps,
+    const QString &key,
+    const QDateTime &dateTime
+)
+{
+    if ( timestamps == nullptr )
+    {
+        return;
+    }
+    if ( !dateTime.isValid() )
+    {
+        return;
+    }
+
+    QJsonObject item;
+    item.insert(QStringLiteral("iso8601"), dateTime.toString(Qt::ISODateWithMs));
+    item.insert(QStringLiteral("epochMs"), dateTime.toMSecsSinceEpoch());
+    timestamps->insert(key, item);
+}
+
+QJsonObject buildPermissionsObject(const QFileInfo &fileInfo)
+{
+    const QFileDevice::Permissions permissions = fileInfo.permissions();
+    QJsonObject permissionObject;
+    permissionObject.insert(
+        QStringLiteral("ownerRead"),
+        static_cast<bool>(permissions & QFileDevice::ReadOwner)
+    );
+    permissionObject.insert(
+        QStringLiteral("ownerWrite"),
+        static_cast<bool>(permissions & QFileDevice::WriteOwner)
+    );
+    permissionObject.insert(
+        QStringLiteral("ownerExecute"),
+        static_cast<bool>(permissions & QFileDevice::ExeOwner)
+    );
+    permissionObject.insert(
+        QStringLiteral("groupRead"),
+        static_cast<bool>(permissions & QFileDevice::ReadGroup)
+    );
+    permissionObject.insert(
+        QStringLiteral("groupWrite"),
+        static_cast<bool>(permissions & QFileDevice::WriteGroup)
+    );
+    permissionObject.insert(
+        QStringLiteral("groupExecute"),
+        static_cast<bool>(permissions & QFileDevice::ExeGroup)
+    );
+    permissionObject.insert(
+        QStringLiteral("otherRead"),
+        static_cast<bool>(permissions & QFileDevice::ReadOther)
+    );
+    permissionObject.insert(
+        QStringLiteral("otherWrite"),
+        static_cast<bool>(permissions & QFileDevice::WriteOther)
+    );
+    permissionObject.insert(
+        QStringLiteral("otherExecute"),
+        static_cast<bool>(permissions & QFileDevice::ExeOther)
+    );
+    return permissionObject;
+}
+
+QJsonObject buildStatOutput(
+    const QFileInfo &fileInfo,
+    FileReadOperation operation
+)
+{
+    QJsonObject out;
+    out.insert(QStringLiteral("path"), fileInfo.absoluteFilePath());
+    out.insert(QStringLiteral("operation"), fileReadOperationName(operation));
+    out.insert(QStringLiteral("targetType"), fileTargetType(fileInfo));
+    out.insert(QStringLiteral("name"), fileInfo.fileName());
+    out.insert(QStringLiteral("isFile"), fileInfo.isFile());
+    out.insert(QStringLiteral("isDir"), fileInfo.isDir());
+    out.insert(QStringLiteral("isSymLink"), fileInfo.isSymLink());
+    out.insert(QStringLiteral("isHidden"), fileInfo.isHidden());
+    out.insert(QStringLiteral("isReadable"), fileInfo.isReadable());
+    out.insert(QStringLiteral("isWritable"), fileInfo.isWritable());
+    out.insert(QStringLiteral("isExecutable"), fileInfo.isExecutable());
+    if ( fileInfo.isFile() )
+    {
+        out.insert(QStringLiteral("sizeBytes"), fileInfo.size());
+    }
+
+    QJsonObject owner;
+    owner.insert(QStringLiteral("name"), fileInfo.owner());
+    owner.insert(QStringLiteral("id"), static_cast<qint64>(fileInfo.ownerId()));
+    owner.insert(QStringLiteral("group"), fileInfo.group());
+    owner.insert(QStringLiteral("groupId"), static_cast<qint64>(fileInfo.groupId()));
+    out.insert(QStringLiteral("owner"), owner);
+    out.insert(QStringLiteral("permissions"), buildPermissionsObject(fileInfo));
+
+    QJsonObject timestamps;
+    appendTimestamp(
+        &timestamps,
+        QStringLiteral("accessTime"),
+        fileInfo.fileTime(QFileDevice::FileAccessTime)
+    );
+    appendTimestamp(
+        &timestamps,
+        QStringLiteral("birthTime"),
+        fileInfo.fileTime(QFileDevice::FileBirthTime)
+    );
+    appendTimestamp(
+        &timestamps,
+        QStringLiteral("modificationTime"),
+        fileInfo.fileTime(QFileDevice::FileModificationTime)
+    );
+    appendTimestamp(
+        &timestamps,
+        QStringLiteral("metadataChangeTime"),
+        fileInfo.metadataChangeTime()
+    );
+    out.insert(QStringLiteral("timestamps"), timestamps);
+
+    return out;
+}
+
+QJsonObject buildListEntryObject(
+    const QFileInfo &entryInfo,
+    const QString &entryType,
+    const QString &relativePath
+)
+{
+    QJsonObject entry;
+    entry.insert(QStringLiteral("name"), entryInfo.fileName());
+    entry.insert(QStringLiteral("path"), entryInfo.absoluteFilePath());
+    entry.insert(QStringLiteral("relativePath"), relativePath);
+    entry.insert(QStringLiteral("type"), entryType);
+    entry.insert(QStringLiteral("isSymLink"), entryInfo.isSymLink());
+    if ( entryInfo.isFile() )
+    {
+        entry.insert(QStringLiteral("sizeBytes"), entryInfo.size());
+    }
+    return entry;
 }
 
 bool parseReadMaxBytes(
@@ -506,6 +1007,64 @@ bool FileReadAccess::read(
             return false;
         }
 
+        bool recursive = false;
+        if ( !parseOptionalBool(
+                paramsObject,
+                QStringLiteral("recursive"),
+                false,
+                &recursive,
+                &parseError
+            ) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = parseError;
+            }
+            return false;
+        }
+
+        bool includeHidden = true;
+        if ( !parseOptionalBool(
+                paramsObject,
+                QStringLiteral("includeHidden"),
+                true,
+                &includeHidden,
+                &parseError
+            ) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = parseError;
+            }
+            return false;
+        }
+
+        QStringList globPatterns;
+        if ( !parseGlobPatterns(
+                paramsObject,
+                &globPatterns,
+                &parseError
+            ) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = parseError;
+            }
+            return false;
+        }
+
         qint64 maxEntries = defaultReadMaxEntries;
         if ( includeEntries )
         {
@@ -523,20 +1082,71 @@ bool FileReadAccess::read(
             }
         }
 
-        const QDir dir(fileInfo.absoluteFilePath());
-        const QFileInfoList entryInfos = dir.entryInfoList(
-            QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot,
-            QDir::DirsFirst | QDir::Name | QDir::IgnoreCase
-        );
+        const QDir rootDir(fileInfo.absoluteFilePath());
+        QDir::Filters entryFilters = QDir::AllEntries | QDir::NoDotAndDotDot;
+        if ( includeHidden )
+        {
+            entryFilters |= QDir::Hidden | QDir::System;
+        }
+
+        QFileInfoList entryInfos;
+        if ( recursive )
+        {
+            QDirIterator iterator(
+                rootDir.absolutePath(),
+                entryFilters,
+                QDirIterator::Subdirectories
+            );
+            while ( iterator.hasNext() )
+            {
+                iterator.next();
+                entryInfos.append(iterator.fileInfo());
+            }
+
+            std::sort(
+                entryInfos.begin(),
+                entryInfos.end(),
+                [](const QFileInfo &a, const QFileInfo &b)
+                {
+                    if ( a.isDir() != b.isDir() )
+                    {
+                        return a.isDir();
+                    }
+                    return QString::compare(
+                        a.absoluteFilePath(),
+                        b.absoluteFilePath(),
+                        Qt::CaseInsensitive
+                    ) < 0;
+                }
+            );
+        }
+        else
+        {
+            entryInfos = rootDir.entryInfoList(
+                entryFilters,
+                QDir::DirsFirst | QDir::Name | QDir::IgnoreCase
+            );
+        }
 
         int directoryCount = 0;
         int fileCount = 0;
         int otherCount = 0;
+        int totalCount = 0;
         bool truncated = false;
         QJsonArray entries;
 
         for ( const QFileInfo &entryInfo : entryInfos )
         {
+            const QString relativePath = normalizedRelativePath(rootDir, entryInfo);
+            if ( !matchesGlobPatterns(
+                    globPatterns,
+                    relativePath,
+                    entryInfo.fileName()
+                ) )
+            {
+                continue;
+            }
+
             QString entryType = QStringLiteral("other");
             if ( entryInfo.isDir() )
             {
@@ -552,6 +1162,7 @@ bool FileReadAccess::read(
             {
                 ++otherCount;
             }
+            ++totalCount;
 
             if ( includeEntries )
             {
@@ -561,16 +1172,13 @@ bool FileReadAccess::read(
                     continue;
                 }
 
-                QJsonObject entry;
-                entry.insert(QStringLiteral("name"), entryInfo.fileName());
-                entry.insert(QStringLiteral("path"), entryInfo.absoluteFilePath());
-                entry.insert(QStringLiteral("type"), entryType);
-                entry.insert(QStringLiteral("isSymLink"), entryInfo.isSymLink());
-                if ( entryInfo.isFile() )
-                {
-                    entry.insert(QStringLiteral("sizeBytes"), entryInfo.size());
-                }
-                entries.append(entry);
+                entries.append(
+                    buildListEntryObject(
+                        entryInfo,
+                        entryType,
+                        relativePath
+                    )
+                );
             }
         }
 
@@ -578,10 +1186,21 @@ bool FileReadAccess::read(
         out.insert(QStringLiteral("path"), fileInfo.absoluteFilePath());
         out.insert(QStringLiteral("operation"), fileReadOperationName(operation));
         out.insert(QStringLiteral("targetType"), QStringLiteral("directory"));
+        out.insert(QStringLiteral("recursive"), recursive);
+        out.insert(QStringLiteral("includeHidden"), includeHidden);
+        if ( !globPatterns.isEmpty() )
+        {
+            QJsonArray globArray;
+            for ( const QString &pattern : globPatterns )
+            {
+                globArray.append(pattern);
+            }
+            out.insert(QStringLiteral("glob"), globArray);
+        }
         out.insert(QStringLiteral("directoryCount"), directoryCount);
         out.insert(QStringLiteral("fileCount"), fileCount);
         out.insert(QStringLiteral("otherCount"), otherCount);
-        out.insert(QStringLiteral("totalCount"), entryInfos.size());
+        out.insert(QStringLiteral("totalCount"), totalCount);
         out.insert(QStringLiteral("includeEntries"), includeEntries);
         if ( includeEntries )
         {
@@ -591,6 +1210,210 @@ bool FileReadAccess::read(
         }
 
         *result = out;
+        return true;
+    }
+
+    if ( operation == FileReadOperation::Stat )
+    {
+        *result = buildStatOutput(fileInfo, operation);
+        return true;
+    }
+
+    if ( operation == FileReadOperation::Lines )
+    {
+        if ( !fileInfo.isFile() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.read lines target is not a file");
+            }
+            return false;
+        }
+
+        ContentEncoding encoding = ContentEncoding::Utf8;
+        if ( !parseEncoding(
+                paramsObject,
+                QStringLiteral("encoding"),
+                &encoding,
+                &parseError
+            ) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = parseError;
+            }
+            return false;
+        }
+        if ( encoding != ContentEncoding::Utf8 )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.read lines encoding must be utf8");
+            }
+            return false;
+        }
+
+        qint64 startLine = 0;
+        if ( !parseReadLineBoundary(
+                paramsObject,
+                QStringLiteral("startLine"),
+                QStringLiteral("fromLine"),
+                &startLine,
+                &parseError
+            ) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = parseError;
+            }
+            return false;
+        }
+
+        qint64 endLine = 0;
+        if ( !parseReadLineBoundary(
+                paramsObject,
+                QStringLiteral("endLine"),
+                QStringLiteral("toLine"),
+                &endLine,
+                &parseError
+            ) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = parseError;
+            }
+            return false;
+        }
+
+        if ( endLine < startLine )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("endLine must be >= startLine");
+            }
+            return false;
+        }
+
+        const qint64 lineSpan = ( endLine - startLine + 1 );
+        if ( lineSpan > maxReadLineSpan )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "line span must be integer within [1, %1]"
+                ).arg(maxReadLineSpan);
+            }
+            return false;
+        }
+
+        qInfo().noquote() << QStringLiteral(
+            "[capability.file.read] lines start path=%1 startLine=%2 endLine=%3"
+        ).arg(
+            fileInfo.absoluteFilePath(),
+            QString::number(startLine),
+            QString::number(endLine)
+        );
+
+        QFile file(fileInfo.absoluteFilePath());
+        if ( !file.open(QIODevice::ReadOnly) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.read open failed: %1").arg(file.errorString().trimmed());
+            }
+            return false;
+        }
+
+        qint64 currentLine = 0;
+        QJsonArray lines;
+        QStringList lineTexts;
+        while ( !file.atEnd() && ( currentLine < endLine ) )
+        {
+            QByteArray rawLine = file.readLine();
+            if ( rawLine.isNull() )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.read read failed: %1").arg(file.errorString().trimmed());
+                }
+                return false;
+            }
+
+            if ( rawLine.isEmpty() && file.atEnd() )
+            {
+                break;
+            }
+
+            ++currentLine;
+            if ( currentLine < startLine )
+            {
+                continue;
+            }
+
+            while ( rawLine.endsWith('\n') ||
+                    rawLine.endsWith('\r') )
+            {
+                rawLine.chop(1);
+            }
+
+            const QString lineText = QString::fromUtf8(rawLine);
+            QJsonObject lineItem;
+            lineItem.insert(QStringLiteral("lineNumber"), currentLine);
+            lineItem.insert(QStringLiteral("text"), lineText);
+            lines.append(lineItem);
+            lineTexts.append(lineText);
+        }
+
+        const bool eof = file.atEnd();
+        const bool hasMore = !eof;
+
+        QJsonObject out;
+        out.insert(QStringLiteral("path"), fileInfo.absoluteFilePath());
+        out.insert(QStringLiteral("operation"), fileReadOperationName(operation));
+        out.insert(QStringLiteral("targetType"), QStringLiteral("file"));
+        out.insert(QStringLiteral("encoding"), QStringLiteral("utf8"));
+        out.insert(QStringLiteral("startLine"), startLine);
+        out.insert(QStringLiteral("endLine"), endLine);
+        out.insert(QStringLiteral("returnedLineCount"), lines.size());
+        out.insert(QStringLiteral("hasMore"), hasMore);
+        out.insert(QStringLiteral("eof"), eof);
+        out.insert(QStringLiteral("content"), lineTexts.join(QLatin1Char('\n')));
+        out.insert(QStringLiteral("lines"), lines);
+        *result = out;
+
+        qInfo().noquote() << QStringLiteral(
+            "[capability.file.read] lines done path=%1 startLine=%2 endLine=%3 returnedLineCount=%4 eof=%5"
+        ).arg(
+            fileInfo.absoluteFilePath(),
+            QString::number(startLine),
+            QString::number(endLine),
+            QString::number(lines.size()),
+            eof ? QStringLiteral("true") : QStringLiteral("false")
+        );
         return true;
     }
 
@@ -944,9 +1767,42 @@ bool FileReadAccess::read(
         return false;
     }
 
+    qint64 offsetBytes = 0;
+    if ( !parseReadOffsetBytes(paramsObject, &offsetBytes, &parseError) )
+    {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
+        if ( error != nullptr )
+        {
+            *error = parseError;
+        }
+        return false;
+    }
+    if ( offsetBytes > fileInfo.size() )
+    {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "offsetBytes must be integer within [0, %1]"
+            ).arg(fileInfo.size());
+        }
+        return false;
+    }
+
     qInfo().noquote() << QStringLiteral(
-        "[capability.file.read] start path=%1 maxBytes=%2 encoding=%3"
-    ).arg(fileInfo.absoluteFilePath()).arg(maxBytes).arg(encodingName(encoding));
+        "[capability.file.read] start path=%1 offsetBytes=%2 maxBytes=%3 encoding=%4"
+    ).arg(
+        fileInfo.absoluteFilePath(),
+        QString::number(offsetBytes),
+        QString::number(maxBytes),
+        encodingName(encoding)
+    );
 
     QFile file(fileInfo.absoluteFilePath());
     if ( !file.open(QIODevice::ReadOnly) )
@@ -958,14 +1814,38 @@ bool FileReadAccess::read(
         return false;
     }
 
-    QByteArray bytes = file.read(maxBytes + 1);
-    if ( bytes.isNull() )
+    if ( !file.seek(offsetBytes) )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("file.read read failed: %1").arg(file.errorString().trimmed());
+            *error = QStringLiteral("file.read seek failed: %1").arg(file.errorString().trimmed());
         }
         return false;
+    }
+
+    const qint64 readBudgetBytes = maxBytes + 1;
+    qint64 remainingBytes = readBudgetBytes;
+    QByteArray bytes;
+    bytes.reserve(static_cast<int>(qMin(readBudgetBytes, defaultReadMaxBytes)));
+    while ( remainingBytes > 0 )
+    {
+        const qint64 currentReadBytes = qMin(remainingBytes, defaultReadChunkBytes);
+        const QByteArray chunk = file.read(currentReadBytes);
+        if ( chunk.isNull() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.read read failed: %1").arg(file.errorString().trimmed());
+            }
+            return false;
+        }
+        if ( chunk.isEmpty() )
+        {
+            break;
+        }
+
+        bytes.append(chunk);
+        remainingBytes -= chunk.size();
     }
 
     const bool truncated = bytes.size() > maxBytes;
@@ -973,6 +1853,9 @@ bool FileReadAccess::read(
     {
         bytes.truncate(static_cast<int>(maxBytes));
     }
+    const qint64 readBytes = bytes.size();
+    const qint64 nextOffsetBytes = offsetBytes + readBytes;
+    const bool hasMore = nextOffsetBytes < fileInfo.size();
 
     QJsonObject out;
     out.insert(QStringLiteral("path"), fileInfo.absoluteFilePath());
@@ -980,15 +1863,26 @@ bool FileReadAccess::read(
     out.insert(QStringLiteral("targetType"), QStringLiteral("file"));
     out.insert(QStringLiteral("encoding"), encodingName(encoding));
     out.insert(QStringLiteral("sizeBytes"), fileInfo.size());
-    out.insert(QStringLiteral("readBytes"), bytes.size());
+    out.insert(QStringLiteral("offsetBytes"), offsetBytes);
+    out.insert(QStringLiteral("nextOffsetBytes"), nextOffsetBytes);
+    out.insert(QStringLiteral("readBytes"), readBytes);
+    out.insert(QStringLiteral("hasMore"), hasMore);
+    out.insert(QStringLiteral("eof"), !hasMore);
     out.insert(QStringLiteral("truncated"), truncated);
     out.insert(QStringLiteral("content"), encodeContent(bytes, encoding));
     *result = out;
 
     qInfo().noquote() << QStringLiteral(
-        "[capability.file.read] done path=%1 sizeBytes=%2 readBytes=%3 truncated=%4"
-    ).arg(fileInfo.absoluteFilePath()).arg(fileInfo.size()).arg(bytes.size()).arg(
+        "[capability.file.read] done path=%1 offsetBytes=%2 sizeBytes=%3 readBytes=%4 nextOffsetBytes=%5 truncated=%6 hasMore=%7"
+    ).arg(
+        fileInfo.absoluteFilePath(),
+        QString::number(offsetBytes),
+        QString::number(fileInfo.size()),
+        QString::number(readBytes),
+        QString::number(nextOffsetBytes),
         truncated ? QStringLiteral("true") : QStringLiteral("false")
+    ).arg(
+        hasMore ? QStringLiteral("true") : QStringLiteral("false")
     );
     return true;
 }

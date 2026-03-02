@@ -18,7 +18,7 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 
 | 能力分类 | 命令 | 能力说明 |
 | --- | --- | --- |
-| `file` | `file.read` | 通过 `operation=read/list/rg` 执行文件读取、目录列表或 `rg` 搜索。 |
+| `file` | `file.read` | 支持 `operation=read/lines/list/rg/stat`：文件读取（含 `offsetBytes` 分块）、按行区间读取（`startLine~endLine`）、目录遍历（含 `recursive/glob`）与元信息查询（owner/权限/时间戳）。 |
 | `file` | `file.write` | 支持写入/移动（剪切）/删除（回收站），以及 `operation=write/move/delete`、`createDirs/overwrite` 参数。 |
 | `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 `exitCode/stdout/stderr` 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |

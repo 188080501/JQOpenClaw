@@ -30,17 +30,26 @@
 
 ## 2. file.read
 
-用途：读取文件内容、目录列表，或执行 `rg` 搜索。
+用途：读取文件内容、按行区间、目录遍历、元信息，或执行 `rg` 搜索。
 
 `params`：
 - `path`：字符串，必填。
-- `operation`：字符串，可选，默认 `read`。可选值：`read` / `list` / `rg`。
+- `operation`：字符串，可选，默认 `read`。可选值：`read` / `lines` / `list` / `rg` / `stat`。
 - `read` 模式参数：
   - `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
   - `maxBytes`：整数，可选，默认 `1048576`，范围 `[1, 20971520]`。
+  - `offsetBytes`（或 `offset`）：整数，可选，默认 `0`。用于分块读取起始偏移量，范围 `[0, sizeBytes]`。
+- `lines` 模式参数：
+  - `startLine`（或 `fromLine`）：整数，必填，1-based 起始行号。
+  - `endLine`（或 `toLine`）：整数，必填，1-based 结束行号（含）。
+  - `encoding`：仅支持 `utf8`（默认）。
+  - 行区间跨度限制：`endLine - startLine + 1` 需在 `[1, 50000]`。
 - `list` 模式参数：
   - `includeEntries`：布尔，可选，默认 `true`。是否返回目录项列表。
   - `maxEntries`：整数，可选，默认 `200`，范围 `[1, 5000]`。仅在 `includeEntries=true` 时生效。
+  - `recursive`：布尔，可选，默认 `false`。是否递归遍历子目录。
+  - `includeHidden`：布尔，可选，默认 `true`。是否包含隐藏/系统项。
+  - `glob`：字符串或字符串数组，可选。按文件名或相对路径通配过滤（支持 `*`、`?`）。
 - `rg` 模式参数：
   - `pattern`：字符串，必填。
   - `maxMatches`：整数，可选，默认 `200`，范围 `[1, 5000]`。
@@ -48,6 +57,8 @@
   - `includeHidden`：布尔，可选，默认 `false`。
   - `literal`：布尔，可选，默认 `false`（固定字符串匹配）。
   - 内部执行超时：默认 `60000ms`，若设置了 `node.invoke.timeoutMs`（含 `0`），实际超时为二者较小值。
+- `stat` 模式参数：
+  - 无额外必填参数。
 
 示例：
 
@@ -61,6 +72,7 @@
       "operation": "read",
       "path": "C:/Windows/win.ini",
       "encoding": "utf8",
+      "offsetBytes": 0,
       "maxBytes": 8192
     },
     "timeoutMs": 15000,
@@ -80,8 +92,31 @@
     "params": {
       "operation": "list",
       "path": "C:/Temp",
+      "recursive": true,
+      "glob": ["*.log", "logs/*"],
+      "includeHidden": false,
       "includeEntries": true,
       "maxEntries": 200
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
+示例（lines 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "file.read",
+    "params": {
+      "operation": "lines",
+      "path": "C:/Repos/project/src/main.cpp",
+      "startLine": 120,
+      "endLine": 160
     },
     "timeoutMs": 15000,
     "idempotencyKey": "<uuid>"
@@ -109,6 +144,24 @@
 }
 ```
 
+示例（stat 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "file.read",
+    "params": {
+      "operation": "stat",
+      "path": "C:/Temp/app.log"
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
 返回重点（payload）：
 - 公共字段：
   - `path`
@@ -117,10 +170,26 @@
 - `read` 模式字段：
   - `encoding`
   - `sizeBytes`
+  - `offsetBytes`
+  - `nextOffsetBytes`
   - `readBytes`
+  - `hasMore`
+  - `eof`
   - `truncated`
   - `content`
+- `lines` 模式字段：
+  - `encoding`（固定 `utf8`）
+  - `startLine`
+  - `endLine`
+  - `returnedLineCount`
+  - `hasMore`
+  - `eof`
+  - `content`（按 `\n` 拼接）
+  - `lines`（数组元素字段：`lineNumber`、`text`）
 - `list` 模式字段：
+  - `recursive`
+  - `includeHidden`
+  - `glob`（可选，数组）
   - `directoryCount`
   - `fileCount`
   - `otherCount`
@@ -128,7 +197,7 @@
   - `includeEntries`
   - `maxEntries`（仅 `includeEntries=true` 返回）
   - `truncated`（仅 `includeEntries=true` 返回）
-  - `entries`（仅 `includeEntries=true` 返回，元素字段：`name`、`path`、`type`、`isSymLink`、`sizeBytes`[文件项才有]）
+  - `entries`（仅 `includeEntries=true` 返回，元素字段：`name`、`path`、`relativePath`、`type`、`isSymLink`、`sizeBytes`[文件项才有]）
 - `rg` 模式字段：
   - `pattern`
   - `caseSensitive`
@@ -141,6 +210,14 @@
   - `rgExitCode`
   - `stderr`（可选）
   - `matches`（数组元素字段：`path`、`lineNumber`、`columnStart`、`columnEnd`、`lineText`、`matchText`）
+- `stat` 模式字段：
+  - `name`
+  - `isFile` / `isDir` / `isSymLink` / `isHidden`
+  - `isReadable` / `isWritable` / `isExecutable`
+  - `sizeBytes`（文件时返回）
+  - `owner`（`name`、`id`、`group`、`groupId`）
+  - `permissions`（owner/group/other 的 read/write/execute）
+  - `timestamps`（`accessTime`、`birthTime`、`modificationTime`、`metadataChangeTime`，各含 `iso8601`、`epochMs`）
 
 ## 3. file.write
 
