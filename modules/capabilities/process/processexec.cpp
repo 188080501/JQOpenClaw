@@ -305,6 +305,48 @@ QString processExitStatusName(QProcess::ExitStatus exitStatus)
     }
     return QStringLiteral("crash");
 }
+
+QString processErrorName(QProcess::ProcessError processError)
+{
+    switch ( processError )
+    {
+    case QProcess::FailedToStart:
+        return QStringLiteral("failed_to_start");
+    case QProcess::Crashed:
+        return QStringLiteral("crashed");
+    case QProcess::Timedout:
+        return QStringLiteral("timed_out");
+    case QProcess::ReadError:
+        return QStringLiteral("read_error");
+    case QProcess::WriteError:
+        return QStringLiteral("write_error");
+    case QProcess::UnknownError:
+        return QStringLiteral("unknown");
+    }
+    return QStringLiteral("unknown");
+}
+
+bool hasProcessError(QProcess::ProcessError processError)
+{
+    return processError != QProcess::UnknownError;
+}
+
+QString processResultClass(bool timedOut, QProcess::ExitStatus exitStatus, int exitCode)
+{
+    if ( timedOut )
+    {
+        return QStringLiteral("timeout");
+    }
+    if ( exitStatus != QProcess::NormalExit )
+    {
+        return QStringLiteral("crash");
+    }
+    if ( exitCode != 0 )
+    {
+        return QStringLiteral("non_zero_exit");
+    }
+    return QStringLiteral("ok");
+}
 }
 
 bool ProcessExec::execute(const QJsonValue &params, QJsonObject *result, QString *error)
@@ -399,6 +441,12 @@ bool ProcessExec::execute(const QJsonValue &params, QJsonObject *result, QString
 
     const QByteArray stdoutBytes = process.readAllStandardOutput();
     const QByteArray stderrBytes = process.readAllStandardError();
+    const QProcess::ExitStatus exitStatus = process.exitStatus();
+    const int exitCode = process.exitCode();
+    const QProcess::ProcessError processError = process.error();
+    const bool processHasError = hasProcessError(processError);
+    const QString resultClass = processResultClass(timedOut, exitStatus, exitCode);
+    const bool ok = ( resultClass == QStringLiteral("ok") );
 
     QJsonObject out;
     out.insert(QStringLiteral("program"), program);
@@ -407,15 +455,21 @@ bool ProcessExec::execute(const QJsonValue &params, QJsonObject *result, QString
     out.insert(QStringLiteral("timeoutMs"), timeoutMs);
     out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
     out.insert(QStringLiteral("timedOut"), timedOut);
-    out.insert(QStringLiteral("exitCode"), process.exitCode());
+    out.insert(QStringLiteral("exitCode"), exitCode);
     out.insert(
         QStringLiteral("exitStatus"),
-        processExitStatusName(process.exitStatus())
+        processExitStatusName(exitStatus)
     );
     out.insert(QStringLiteral("stdout"), QString::fromLocal8Bit(stdoutBytes));
     out.insert(QStringLiteral("stderr"), QString::fromLocal8Bit(stderrBytes));
-    out.insert(QStringLiteral("processError"), static_cast<int>(process.error()));
-    out.insert(QStringLiteral("processErrorString"), process.errorString().trimmed());
+    out.insert(QStringLiteral("ok"), ok);
+    out.insert(QStringLiteral("resultClass"), resultClass);
+    if ( processHasError )
+    {
+        out.insert(QStringLiteral("processError"), static_cast<int>(processError));
+        out.insert(QStringLiteral("processErrorName"), processErrorName(processError));
+        out.insert(QStringLiteral("processErrorString"), process.errorString().trimmed());
+    }
 
     *result = out;
     qInfo().noquote() << QStringLiteral(
@@ -428,4 +482,3 @@ bool ProcessExec::execute(const QJsonValue &params, QJsonObject *result, QString
     );
     return true;
 }
-

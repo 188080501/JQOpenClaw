@@ -142,8 +142,15 @@
 - `exitStatus`
 - `stdout`
 - `stderr`
-- `processError`
-- `processErrorString`
+- `ok`：布尔。是否为正常完成且 `exitCode == 0`。
+- `resultClass`：字符串。`ok` / `non_zero_exit` / `crash` / `timeout`。
+- `processError`：数字，可选。仅在存在进程级错误时返回。
+- `processErrorName`：字符串，可选。仅在存在进程级错误时返回，取值：`failed_to_start` / `crashed` / `timed_out` / `read_error` / `write_error`。
+- `processErrorString`：字符串，可选。仅在存在进程级错误时返回。
+
+判定建议：
+- 优先使用 `ok` 与 `resultClass` 判断执行结果。
+- 无进程级错误时，不返回 `processError*` 字段。
 
 ## 5. system.screenshot
 
@@ -197,4 +204,3 @@
 - `command not allowlisted`
   - 网关策略拦截。
   - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`）。
-
