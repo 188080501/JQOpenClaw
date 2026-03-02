@@ -18,7 +18,7 @@ enum class ContentEncoding
     Base64,
 };
 
-const qint64 maxWriteBytes = 20 * 1024 * 1024;
+const qint64 maxWriteBytes = 64 * 1024 * 1024;
 
 enum class FileWriteOperation
 {

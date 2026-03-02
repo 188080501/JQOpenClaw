@@ -250,6 +250,7 @@
 用途：远程执行进程命令（QProcess）。
 
 `params`：
+- `command`：字符串，不支持；传入会返回 `INVALID_PARAMS`。
 - `program`：字符串，必填。
 - `arguments`：字符串数组，可选。
 - `workingDirectory`：字符串，可选。
