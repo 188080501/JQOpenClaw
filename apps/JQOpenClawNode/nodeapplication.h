@@ -2,10 +2,13 @@
 #define JQOPENCLAW_APPS_JQOPENCLAWNODE_NODEAPPLICATION_H_
 
 // Qt lib import
+#include <QHash>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QList>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QSystemTrayIcon>
 #include <QTimer>
 
@@ -83,6 +86,24 @@ private:
     void sendConnectRequest(const QString &nonce);
     static QString parseErrorMessage(const QJsonObject &errorObject);
 
+    struct InvokeReplayTarget
+    {
+        QString invokeId;
+        QString nodeId;
+    };
+
+    struct InvokeIdempotencyEntry
+    {
+        QString requestFingerprint;
+        bool completed = false;
+        bool ok = false;
+        QJsonValue payload;
+        QString errorCode;
+        QString errorMessage;
+        qint64 updatedAtMs = 0;
+        QList<InvokeReplayTarget> waitingTargets;
+    };
+
     NodeOptions options_;
     DeviceIdentity identity_;
     GatewayClient gatewayClient_;
@@ -97,6 +118,8 @@ private:
     ConnectionState connectionState_ = ConnectionState::Disconnected;
     QString connectionStateDetail_;
     QTimer pairingReconnectTimer_;
+    QHash<QString, InvokeIdempotencyEntry> invokeIdempotencyCache_;
+    QStringList invokeIdempotencyCacheOrder_;
 };
 
 #endif // JQOPENCLAW_APPS_JQOPENCLAWNODE_NODEAPPLICATION_H_

@@ -39,6 +39,8 @@
 namespace
 {
 constexpr int kPairingReconnectIntervalMs = 15000;
+constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
+constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
 
 QString extractString(const QJsonObject &object, const QString &key)
 {
@@ -108,6 +110,31 @@ bool trySerializeJsonValue(const QJsonValue &value, QString *json)
     }
 
     return false;
+}
+
+QString buildInvokeIdempotencyCacheKey(
+    const QString &nodeId,
+    const QString &command,
+    const QString &idempotencyKey
+)
+{
+    return QStringLiteral("%1\n%2\n%3").arg(nodeId, command, idempotencyKey);
+}
+
+QString buildInvokeRequestFingerprint(
+    const QString &command,
+    const QJsonValue &params,
+    int invokeTimeoutMs
+)
+{
+    QString paramsJson;
+    if ( !trySerializeJsonValue(params, &paramsJson) )
+    {
+        paramsJson = QStringLiteral("null");
+    }
+
+    return QStringLiteral("%1\n%2\n%3")
+        .arg(command, QString::number(invokeTimeoutMs), paramsJson);
 }
 
 QString normalizeBasePath(const QString &path)
@@ -647,6 +674,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     const QString invokeId = extractString(payload, QStringLiteral("id"));
     const QString nodeId = extractString(payload, QStringLiteral("nodeId"));
     const QString command = extractString(payload, QStringLiteral("command"));
+    const QString idempotencyKey = extractString(payload, QStringLiteral("idempotencyKey"));
     const QJsonValue paramsJsonValue = payload.value(QStringLiteral("paramsJSON"));
     const QString paramsJson = paramsJsonValue.isString()
         ? paramsJsonValue.toString().trimmed()
@@ -660,6 +688,20 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     {
         qWarning().noquote() << QStringLiteral(
             "[node.invoke] request ignored: missing id/nodeId/command"
+        );
+        return;
+    }
+
+    if ( idempotencyKey.isEmpty() )
+    {
+        qWarning().noquote() << QStringLiteral(
+            "[node.invoke] invalid request id=%1 command=%2 error=missing idempotencyKey"
+        ).arg(invokeId, command);
+        sendInvokeError(
+            invokeId,
+            nodeId,
+            QStringLiteral("INVALID_PARAMS"),
+            QStringLiteral("idempotencyKey is required")
         );
         return;
     }
@@ -695,14 +737,236 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
         return;
     }
 
+    const QString invokeCacheKey = buildInvokeIdempotencyCacheKey(
+        nodeId,
+        command,
+        idempotencyKey
+    );
+    const QString requestFingerprint = buildInvokeRequestFingerprint(
+        command,
+        params,
+        invokeTimeoutMs
+    );
+
+    auto pruneInvokeIdempotencyCache = [this](qint64 nowMs)
+    {
+        for ( int index = invokeIdempotencyCacheOrder_.size() - 1; index >= 0; --index )
+        {
+            const QString cacheKey = invokeIdempotencyCacheOrder_.at(index);
+            QHash<QString, InvokeIdempotencyEntry>::iterator cacheIter =
+                invokeIdempotencyCache_.find(cacheKey);
+            if ( cacheIter == invokeIdempotencyCache_.end() )
+            {
+                invokeIdempotencyCacheOrder_.removeAt(index);
+                continue;
+            }
+
+            if ( !cacheIter->completed )
+            {
+                continue;
+            }
+
+            if ( ( nowMs - cacheIter->updatedAtMs ) <= kInvokeIdempotencyCacheTtlMs )
+            {
+                continue;
+            }
+
+            invokeIdempotencyCache_.erase(cacheIter);
+            invokeIdempotencyCacheOrder_.removeAt(index);
+        }
+
+        while ( invokeIdempotencyCache_.size() > kInvokeIdempotencyCacheMaxEntries )
+        {
+            int removeIndex = -1;
+            for ( int index = 0; index < invokeIdempotencyCacheOrder_.size(); ++index )
+            {
+                const QString cacheKey = invokeIdempotencyCacheOrder_.at(index);
+                QHash<QString, InvokeIdempotencyEntry>::iterator cacheIter =
+                    invokeIdempotencyCache_.find(cacheKey);
+                if ( cacheIter == invokeIdempotencyCache_.end() )
+                {
+                    removeIndex = index;
+                    break;
+                }
+
+                if ( cacheIter->completed )
+                {
+                    invokeIdempotencyCache_.erase(cacheIter);
+                    removeIndex = index;
+                    break;
+                }
+            }
+
+            if ( removeIndex < 0 )
+            {
+                break;
+            }
+
+            invokeIdempotencyCacheOrder_.removeAt(removeIndex);
+        }
+    };
+
+    auto sendInvokeResultToTarget = [this](
+        const QString &targetInvokeId,
+        const QString &targetNodeId,
+        bool ok,
+        const QJsonValue &resultPayload,
+        const QString &resultErrorCode,
+        const QString &resultErrorMessage
+    )
+    {
+        if ( ok )
+        {
+            sendInvokeSuccess(targetInvokeId, targetNodeId, resultPayload);
+            return;
+        }
+
+        sendInvokeError(
+            targetInvokeId,
+            targetNodeId,
+            resultErrorCode,
+            resultErrorMessage
+        );
+    };
+
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    pruneInvokeIdempotencyCache(nowMs);
+
+    QHash<QString, InvokeIdempotencyEntry>::iterator existingInvokeCacheIter =
+        invokeIdempotencyCache_.find(invokeCacheKey);
+    if ( existingInvokeCacheIter != invokeIdempotencyCache_.end() )
+    {
+        if ( existingInvokeCacheIter->requestFingerprint != requestFingerprint )
+        {
+            const QString message = QStringLiteral(
+                "idempotencyKey cannot be reused with different request parameters"
+            );
+            qWarning().noquote() << QStringLiteral(
+                "[node.invoke] invalid idempotency key id=%1 command=%2 error=%3"
+            ).arg(invokeId, command, message);
+            sendInvokeError(
+                invokeId,
+                nodeId,
+                QStringLiteral("INVALID_PARAMS"),
+                message
+            );
+            return;
+        }
+
+        existingInvokeCacheIter->updatedAtMs = nowMs;
+        if ( existingInvokeCacheIter->completed )
+        {
+            sendInvokeResultToTarget(
+                invokeId,
+                nodeId,
+                existingInvokeCacheIter->ok,
+                existingInvokeCacheIter->payload,
+                existingInvokeCacheIter->errorCode,
+                existingInvokeCacheIter->errorMessage
+            );
+            qInfo().noquote() << QStringLiteral(
+                "[node.invoke] replayed idempotent result id=%1 command=%2 key=%3"
+            ).arg(invokeId, command, idempotencyKey);
+            pruneInvokeIdempotencyCache(nowMs);
+            return;
+        }
+
+        bool alreadyQueued = false;
+        for ( const InvokeReplayTarget &target : existingInvokeCacheIter->waitingTargets )
+        {
+            if ( target.invokeId == invokeId && target.nodeId == nodeId )
+            {
+                alreadyQueued = true;
+                break;
+            }
+        }
+        if ( !alreadyQueued )
+        {
+            InvokeReplayTarget target;
+            target.invokeId = invokeId;
+            target.nodeId = nodeId;
+            existingInvokeCacheIter->waitingTargets.append(target);
+        }
+
+        qInfo().noquote() << QStringLiteral(
+            "[node.invoke] request joined in-flight idempotency id=%1 command=%2 key=%3"
+        ).arg(invokeId, command, idempotencyKey);
+        return;
+    }
+
+    InvokeIdempotencyEntry newInvokeEntry;
+    newInvokeEntry.requestFingerprint = requestFingerprint;
+    newInvokeEntry.updatedAtMs = nowMs;
+    invokeIdempotencyCache_.insert(invokeCacheKey, newInvokeEntry);
+    invokeIdempotencyCacheOrder_.append(invokeCacheKey);
+    pruneInvokeIdempotencyCache(nowMs);
+
+    auto finalizeInvokeResult = [this,
+                                 &invokeCacheKey,
+                                 &invokeId,
+                                 &nodeId,
+                                 &pruneInvokeIdempotencyCache,
+                                 &sendInvokeResultToTarget](
+                                    bool ok,
+                                    const QJsonValue &resultPayload,
+                                    const QString &resultErrorCode,
+                                    const QString &resultErrorMessage
+                                )
+    {
+        const qint64 finishMs = QDateTime::currentMSecsSinceEpoch();
+        QList<InvokeReplayTarget> waitingTargets;
+
+        QHash<QString, InvokeIdempotencyEntry>::iterator cacheIter =
+            invokeIdempotencyCache_.find(invokeCacheKey);
+        if ( cacheIter != invokeIdempotencyCache_.end() )
+        {
+            cacheIter->completed = true;
+            cacheIter->ok = ok;
+            cacheIter->payload = resultPayload;
+            cacheIter->errorCode = resultErrorCode;
+            cacheIter->errorMessage = resultErrorMessage;
+            cacheIter->updatedAtMs = finishMs;
+            waitingTargets = cacheIter->waitingTargets;
+            cacheIter->waitingTargets.clear();
+        }
+
+        sendInvokeResultToTarget(
+            invokeId,
+            nodeId,
+            ok,
+            resultPayload,
+            resultErrorCode,
+            resultErrorMessage
+        );
+
+        for ( const InvokeReplayTarget &target : waitingTargets )
+        {
+            if ( target.invokeId == invokeId && target.nodeId == nodeId )
+            {
+                continue;
+            }
+
+            sendInvokeResultToTarget(
+                target.invokeId,
+                target.nodeId,
+                ok,
+                resultPayload,
+                resultErrorCode,
+                resultErrorMessage
+            );
+        }
+
+        pruneInvokeIdempotencyCache(finishMs);
+    };
+
     if ( invokeTimeoutMs == 0 )
     {
         qWarning().noquote() << QStringLiteral(
             "[node.invoke] timeout immediately id=%1 command=%2"
         ).arg(invokeId, command);
-        sendInvokeError(
-            invokeId,
-            nodeId,
+        finalizeInvokeResult(
+            false,
+            QJsonValue(),
             QStringLiteral("TIMEOUT"),
             QStringLiteral("node invoke timed out")
         );
@@ -724,11 +988,11 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
         qWarning().noquote() << QStringLiteral(
             "[node.invoke] command failed id=%1 command=%2 code=%3 message=%4"
         ).arg(invokeId, command, errorCode, errorMessage);
-        sendInvokeError(invokeId, nodeId, errorCode, errorMessage);
+        finalizeInvokeResult(false, QJsonValue(), errorCode, errorMessage);
         return;
     }
 
-    sendInvokeSuccess(invokeId, nodeId, responsePayload);
+    finalizeInvokeResult(true, responsePayload, QString(), QString());
     qInfo().noquote() << QStringLiteral(
         "[node.invoke] command done id=%1 command=%2"
     ).arg(invokeId, command);
