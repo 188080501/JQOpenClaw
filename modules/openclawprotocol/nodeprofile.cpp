@@ -15,6 +15,8 @@ struct CapabilityDeclaration
 
 const CapabilityDeclaration capabilityDeclarations[] =
 {
+    {"file", "file.read", true},
+    {"file", "file.write", true},
     {"process", "process.exec", true},
     {"system", "system.screenshot", true},
     {"system", "system.info", true},

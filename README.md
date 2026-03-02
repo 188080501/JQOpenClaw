@@ -13,9 +13,11 @@
 
 | 能力分类 | 命令 | 能力说明 |
 | --- | --- | --- |
-| `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 exitCode/stdout/stderr 等结果。 |
+| `file` | `file.read` | 读取指定文件内容，支持 `utf8/base64` 返回与最大读取字节限制。 |
+| `file` | `file.write` | 写入指定文件内容，支持 `utf8/base64` 输入、追加写入与自动创建目录。 |
+| `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 `exitCode/stdout/stderr` 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
-| `system` | `system.info` | 采集系统基础信息（CPU名称+核心/线程、计算机名、内存、GPU、IP、硬盘容量）。 |
+| `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名、内存、GPU、IP、硬盘容量）。 |
 
 ## 运行参数
 
@@ -26,7 +28,7 @@
 | `--token <gateway-token>` | Gateway 认证令牌 | 是 |
 | `--tls` | 启用 TLS 连接 | 否 |
 | `--tls-fingerprint <sha256>` | TLS 证书指纹固定 | 否 |
-| `--display-name <name>` | 节点展示名 | 否 |
+| `--display-name <name>` | 节点显示名 | 否 |
 | `--node-id <id>` | 节点标识 | 否 |
 | `--file-server-uri <uri>` | 文件服务器基础地址 | 否（截图上传时必需） |
 | `--file-server-token <token>` | 文件服务器鉴权 token（`X-Token`） | 否（截图上传时必需） |
@@ -37,9 +39,9 @@
 - 框架：Qt 6.5.3（Core / Network / WebSockets）
 - 编译器：MSVC
 - 构建系统：qmake（`.pro` / `.pri`）
-- 序列化：Qt JSON（QJsonDocument / QJsonObject）
+- 序列化：Qt JSON（`QJsonDocument / QJsonObject`）
 
-## Node整体运行流程
+## Node 整体运行流程
 
 1. 解析启动参数（host/port/token/tls 等）。
 2. 初始化 OpenSSL。
@@ -55,6 +57,7 @@
 JQOpenClaw
 ├─ apps/JQOpenClawNode/          # Node 应用入口与命令分发
 ├─ modules/openclawprotocol/     # 网关握手与 caps/commands/permissions 声明
+├─ modules/capabilities/file/    # file 能力实现（file.read / file.write）
 ├─ modules/capabilities/process/ # process 能力实现（process.exec）
 ├─ modules/capabilities/system/  # system 能力实现（system.screenshot / system.info）
 ├─ modules/crypto/               # 设备身份、签名与加解密相关能力
@@ -66,3 +69,4 @@ JQOpenClaw
 - OpenSSL 依赖说明：[docs/OpenSSL依赖.md](docs/OpenSSL依赖.md)
 - Nginx 依赖说明：[docs/Nginx依赖.md](docs/Nginx依赖.md)
 - Nginx 配置模板：[docs/data.conf](docs/data.conf)
+

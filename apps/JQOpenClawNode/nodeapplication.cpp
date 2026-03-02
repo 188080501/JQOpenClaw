@@ -17,6 +17,7 @@
 #include <QUrl>
 
 // JQOpenClaw import
+#include "capabilities/file/fileaccess.h"
 #include "capabilities/process/processexec.h"
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
@@ -697,6 +698,52 @@ bool NodeApplication::executeInvokeCommand(
         }
 
         *payload = executeResult;
+        return true;
+    }
+
+    if ( command == QStringLiteral("file.read") )
+    {
+        QJsonObject readResult;
+        QString readError;
+        if ( !FileAccess::read(params, &readResult, &readError) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = QStringLiteral("FILE_READ_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = readError.isEmpty()
+                    ? QStringLiteral("failed to read file")
+                    : readError;
+            }
+            return false;
+        }
+
+        *payload = readResult;
+        return true;
+    }
+
+    if ( command == QStringLiteral("file.write") )
+    {
+        QJsonObject writeResult;
+        QString writeError;
+        if ( !FileAccess::write(params, &writeResult, &writeError) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = QStringLiteral("FILE_WRITE_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = writeError.isEmpty()
+                    ? QStringLiteral("failed to write file")
+                    : writeError;
+            }
+            return false;
+        }
+
+        *payload = writeResult;
         return true;
     }
 
