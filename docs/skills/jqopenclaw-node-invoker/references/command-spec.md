@@ -401,6 +401,10 @@
 - `cpuCores`
 - `cpuThreads`
 - `computerName`
+- `hostName`
+- `osName`
+- `osVersion`
+- `userName`
 - `memory`
 - `gpuNames`
 - `ip`

@@ -22,7 +22,7 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 | `file` | `file.write` | 支持写入/移动（剪切）/删除（回收站），以及 `operation=write/move/delete`、`createDirs/overwrite` 参数。 |
 | `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 `exitCode/stdout/stderr` 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
-| `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名、内存、GPU、IP、硬盘容量）。 |
+| `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名/主机名、系统名称/版本、用户名、内存、GPU、IP、硬盘容量）。 |
 
 ## 调用约定
 

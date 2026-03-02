@@ -126,6 +126,22 @@ QList<QMap<QString, QString>> runWmicValueRecords(const QStringList &arguments)
     return parseWmicValueRecords(rawOutput);
 }
 
+QString firstRecordValue(
+    const QList<QMap<QString, QString>> &records,
+    const QString &key
+)
+{
+    for ( const auto &record : records )
+    {
+        const QString value = record.value(key).trimmed();
+        if ( !value.isEmpty() )
+        {
+            return value;
+        }
+    }
+    return QString();
+}
+
 QStringList sortedValues(const QSet<QString> &values)
 {
     QStringList sorted = values.values();
@@ -159,14 +175,12 @@ double kibToGb(quint64 kib)
     return roundGb(static_cast<double>(kib) / (1024.0 * 1024.0));
 }
 
-QString readComputerName()
+QString readComputerName(const QList<QMap<QString, QString>> &computerSystemRecords)
 {
-    QString computerName = runWmicSingleValue(
-        {QStringLiteral("computersystem"), QStringLiteral("get"), QStringLiteral("Name")}
-    );
+    QString computerName = firstRecordValue(computerSystemRecords, QStringLiteral("Name"));
     if ( !computerName.isEmpty() )
     {
-        qInfo().noquote() << QStringLiteral("[capability.system.info] computerName source=wmic value=%1")
+        qInfo().noquote() << QStringLiteral("[capability.system.info] computerName source=wmic.records value=%1")
                                  .arg(computerName);
         return computerName;
     }
@@ -185,14 +199,92 @@ QString readComputerName()
     return computerName;
 }
 
-QString readCpuName()
+QString readHostName()
 {
-    QString cpuName = runWmicSingleValue(
-        {QStringLiteral("cpu"), QStringLiteral("get"), QStringLiteral("Name")}
-    );
+    QString hostName = QSysInfo::machineHostName().trimmed();
+    if ( !hostName.isEmpty() )
+    {
+        qInfo().noquote() << QStringLiteral("[capability.system.info] hostName source=machineHostName value=%1")
+                                 .arg(hostName);
+        return hostName;
+    }
+
+    hostName = qEnvironmentVariable("COMPUTERNAME").trimmed();
+    qInfo().noquote() << QStringLiteral("[capability.system.info] hostName source=env.COMPUTERNAME value=%1")
+                             .arg(hostName);
+    return hostName;
+}
+
+QString readOsName(const QList<QMap<QString, QString>> &osRecords)
+{
+    QString osName = firstRecordValue(osRecords, QStringLiteral("Caption"));
+    if ( !osName.isEmpty() )
+    {
+        qInfo().noquote() << QStringLiteral("[capability.system.info] osName source=wmic.records value=%1")
+                                 .arg(osName);
+        return osName;
+    }
+
+    osName = QSysInfo::prettyProductName().trimmed();
+    if ( !osName.isEmpty() )
+    {
+        qInfo().noquote() << QStringLiteral("[capability.system.info] osName source=prettyProductName value=%1")
+                                 .arg(osName);
+        return osName;
+    }
+
+    osName = QSysInfo::productType().trimmed();
+    qInfo().noquote() << QStringLiteral("[capability.system.info] osName source=productType value=%1")
+                             .arg(osName);
+    return osName;
+}
+
+QString readOsVersion(const QList<QMap<QString, QString>> &osRecords)
+{
+    QString osVersion = firstRecordValue(osRecords, QStringLiteral("Version"));
+    if ( !osVersion.isEmpty() )
+    {
+        qInfo().noquote() << QStringLiteral("[capability.system.info] osVersion source=wmic.records value=%1")
+                                 .arg(osVersion);
+        return osVersion;
+    }
+
+    osVersion = QSysInfo::productVersion().trimmed();
+    if ( !osVersion.isEmpty() )
+    {
+        qInfo().noquote() << QStringLiteral("[capability.system.info] osVersion source=productVersion value=%1")
+                                 .arg(osVersion);
+        return osVersion;
+    }
+
+    osVersion = QSysInfo::kernelVersion().trimmed();
+    qInfo().noquote() << QStringLiteral("[capability.system.info] osVersion source=kernelVersion value=%1")
+                             .arg(osVersion);
+    return osVersion;
+}
+
+QString readUserName()
+{
+    QString userName = qEnvironmentVariable("USERNAME").trimmed();
+    if ( !userName.isEmpty() )
+    {
+        qInfo().noquote() << QStringLiteral("[capability.system.info] userName source=env.USERNAME value=%1")
+                                 .arg(userName);
+        return userName;
+    }
+
+    userName = qEnvironmentVariable("USER").trimmed();
+    qInfo().noquote() << QStringLiteral("[capability.system.info] userName source=env.USER value=%1")
+                             .arg(userName);
+    return userName;
+}
+
+QString readCpuName(const QList<QMap<QString, QString>> &cpuRecords)
+{
+    QString cpuName = firstRecordValue(cpuRecords, QStringLiteral("Name"));
     if ( !cpuName.isEmpty() )
     {
-        qInfo().noquote() << QStringLiteral("[capability.system.info] cpuName source=wmic value=%1")
+        qInfo().noquote() << QStringLiteral("[capability.system.info] cpuName source=wmic.records value=%1")
                                  .arg(cpuName);
         return cpuName;
     }
@@ -203,7 +295,11 @@ QString readCpuName()
     return cpuName;
 }
 
-void readCpuCoreAndThreadCount(int *coreCount, int *threadCount)
+void readCpuCoreAndThreadCount(
+    const QList<QMap<QString, QString>> &cpuRecords,
+    int *coreCount,
+    int *threadCount
+)
 {
     if ( coreCount != nullptr )
     {
@@ -216,16 +312,7 @@ void readCpuCoreAndThreadCount(int *coreCount, int *threadCount)
 
     int parsedCoreCount = 0;
     int parsedThreadCount = 0;
-    const auto records = runWmicValueRecords(
-        {
-            QStringLiteral("cpu"),
-            QStringLiteral("get"),
-            QStringLiteral("NumberOfCores,NumberOfLogicalProcessors"),
-            QStringLiteral("/value")
-        }
-    );
-
-    for ( const auto &record : records )
+    for ( const auto &record : cpuRecords )
     {
         bool coreOk = false;
         const int cores = record.value(QStringLiteral("NumberOfCores")).trimmed().toInt(&coreOk);
@@ -265,20 +352,15 @@ void readCpuCoreAndThreadCount(int *coreCount, int *threadCount)
     ).arg(parsedCoreCount).arg(parsedThreadCount);
 }
 
-QJsonObject readMemoryInfo()
+QJsonObject readMemoryInfo(
+    const QList<QMap<QString, QString>> &computerSystemRecords,
+    const QList<QMap<QString, QString>> &osRecords
+)
 {
     QJsonObject memory;
 
     quint64 totalPhysicalBytes = 0;
     bool hasTotalPhysicalBytes = false;
-    const auto computerSystemRecords = runWmicValueRecords(
-        {
-            QStringLiteral("computersystem"),
-            QStringLiteral("get"),
-            QStringLiteral("TotalPhysicalMemory"),
-            QStringLiteral("/value")
-        }
-    );
     for ( const auto &record : computerSystemRecords )
     {
         const QString value = record.value(QStringLiteral("TotalPhysicalMemory")).trimmed();
@@ -296,14 +378,6 @@ QJsonObject readMemoryInfo()
     bool hasTotalVisibleKib = false;
     quint64 freePhysicalKib = 0;
     bool hasFreePhysicalKib = false;
-    const auto osRecords = runWmicValueRecords(
-        {
-            QStringLiteral("os"),
-            QStringLiteral("get"),
-            QStringLiteral("TotalVisibleMemorySize,FreePhysicalMemory"),
-            QStringLiteral("/value")
-        }
-    );
     for ( const auto &record : osRecords )
     {
         if ( !hasTotalVisibleKib )
@@ -362,19 +436,10 @@ QJsonObject readMemoryInfo()
     return memory;
 }
 
-QJsonArray readGpuNames()
+QJsonArray readGpuNames(const QList<QMap<QString, QString>> &videoControllerRecords)
 {
     QSet<QString> uniqueNames;
-    const auto records = runWmicValueRecords(
-        {
-            QStringLiteral("path"),
-            QStringLiteral("win32_VideoController"),
-            QStringLiteral("get"),
-            QStringLiteral("Name"),
-            QStringLiteral("/value")
-        }
-    );
-    for ( const auto &record : records )
+    for ( const auto &record : videoControllerRecords )
     {
         const QString name = record.value(QStringLiteral("Name")).trimmed();
         if ( !name.isEmpty() )
@@ -485,18 +550,10 @@ QJsonObject readIpInfo()
     return ipInfo;
 }
 
-QJsonArray readDiskInfo()
+QJsonArray readDiskInfo(const QList<QMap<QString, QString>> &diskRecords)
 {
     QJsonArray disks;
-    const auto records = runWmicValueRecords(
-        {
-            QStringLiteral("diskdrive"),
-            QStringLiteral("get"),
-            QStringLiteral("Model,Size"),
-            QStringLiteral("/value")
-        }
-    );
-    for ( const auto &record : records )
+    for ( const auto &record : diskRecords )
     {
         const QString model = record.value(QStringLiteral("Model")).trimmed();
         const QString sizeText = record.value(QStringLiteral("Size")).trimmed();
@@ -539,11 +596,53 @@ bool SystemInfo::collect(QJsonObject *info, QString *error)
         return false;
     }
 
+    const auto computerSystemRecords = runWmicValueRecords(
+        {
+            QStringLiteral("computersystem"),
+            QStringLiteral("get"),
+            QStringLiteral("Name,TotalPhysicalMemory"),
+            QStringLiteral("/value")
+        }
+    );
+    const auto osRecords = runWmicValueRecords(
+        {
+            QStringLiteral("os"),
+            QStringLiteral("get"),
+            QStringLiteral("Caption,Version,TotalVisibleMemorySize,FreePhysicalMemory"),
+            QStringLiteral("/value")
+        }
+    );
+    const auto cpuRecords = runWmicValueRecords(
+        {
+            QStringLiteral("cpu"),
+            QStringLiteral("get"),
+            QStringLiteral("Name,NumberOfCores,NumberOfLogicalProcessors"),
+            QStringLiteral("/value")
+        }
+    );
+    const auto videoControllerRecords = runWmicValueRecords(
+        {
+            QStringLiteral("path"),
+            QStringLiteral("win32_VideoController"),
+            QStringLiteral("get"),
+            QStringLiteral("Name"),
+            QStringLiteral("/value")
+        }
+    );
+    const auto diskRecords = runWmicValueRecords(
+        {
+            QStringLiteral("diskdrive"),
+            QStringLiteral("get"),
+            QStringLiteral("Model,Size"),
+            QStringLiteral("/value")
+        }
+    );
+
     QJsonObject out;
-    out.insert(QStringLiteral("cpuName"), readCpuName());
+    out.insert(QStringLiteral("cpuName"), readCpuName(cpuRecords));
     int cpuCores = 0;
     int cpuThreads = 0;
-    readCpuCoreAndThreadCount(&cpuCores, &cpuThreads);
+    readCpuCoreAndThreadCount(cpuRecords, &cpuCores, &cpuThreads);
     if ( cpuCores > 0 )
     {
         out.insert(QStringLiteral("cpuCores"), cpuCores);
@@ -552,19 +651,26 @@ bool SystemInfo::collect(QJsonObject *info, QString *error)
     {
         out.insert(QStringLiteral("cpuThreads"), cpuThreads);
     }
-    out.insert(QStringLiteral("computerName"), readComputerName());
-    out.insert(QStringLiteral("memory"), readMemoryInfo());
-    out.insert(QStringLiteral("gpuNames"), readGpuNames());
+    out.insert(QStringLiteral("computerName"), readComputerName(computerSystemRecords));
+    out.insert(QStringLiteral("hostName"), readHostName());
+    out.insert(QStringLiteral("osName"), readOsName(osRecords));
+    out.insert(QStringLiteral("osVersion"), readOsVersion(osRecords));
+    out.insert(QStringLiteral("userName"), readUserName());
+    out.insert(QStringLiteral("memory"), readMemoryInfo(computerSystemRecords, osRecords));
+    out.insert(QStringLiteral("gpuNames"), readGpuNames(videoControllerRecords));
     out.insert(QStringLiteral("ip"), readIpInfo());
-    out.insert(QStringLiteral("disks"), readDiskInfo());
+    out.insert(QStringLiteral("disks"), readDiskInfo(diskRecords));
     *info = out;
     qInfo().noquote() << QStringLiteral(
-        "[capability.system.info] collect done cpuName=%1 cpuCores=%2 cpuThreads=%3 computerName=%4 gpuCount=%5 diskCount=%6"
+        "[capability.system.info] collect done cpuName=%1 cpuCores=%2 cpuThreads=%3 computerName=%4 hostName=%5 osName=%6 userName=%7 gpuCount=%8 diskCount=%9"
     )
                              .arg(out.value(QStringLiteral("cpuName")).toString())
                              .arg(out.value(QStringLiteral("cpuCores")).toInt())
                              .arg(out.value(QStringLiteral("cpuThreads")).toInt())
                              .arg(out.value(QStringLiteral("computerName")).toString())
+                             .arg(out.value(QStringLiteral("hostName")).toString())
+                             .arg(out.value(QStringLiteral("osName")).toString())
+                             .arg(out.value(QStringLiteral("userName")).toString())
                              .arg(out.value(QStringLiteral("gpuNames")).toArray().size())
                              .arg(out.value(QStringLiteral("disks")).toArray().size());
     return true;
