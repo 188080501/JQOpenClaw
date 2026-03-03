@@ -3,12 +3,11 @@ import QtQuick.Window
 import JQControls
 import "./"
 
-Window {
+JQWindow {
     id: window
     width: 560
     height: 700
     minimumWidth: 560
-    minimumHeight: 100
     maximumWidth: 560
     visible: true
     opacity: 0
