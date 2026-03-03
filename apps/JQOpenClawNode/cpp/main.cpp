@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
     app.setOrganizationName("JQOpenClaw");
     app.setQuitOnLastWindowClosed(false);
 
-    if ( !checkSingletonFlag( "8a6f4ab6-68d7-4a09-9e89-0e651f573b69" ) )
+    if ( !checkSingletonFlag( "75b50ce4-915e-4834-b50c-f8249b4e1d5d" ) )
     {
         qInfo().noquote() << "another instance is already running";
         return -1;
