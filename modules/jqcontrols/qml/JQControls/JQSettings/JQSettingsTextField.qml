@@ -12,6 +12,7 @@ JQSettingsRow {
     property alias maximumLength:  jqTextField.maximumLength
     property alias readOnly:       jqTextField.readOnly
     property alias echoMode:       jqTextField.echoMode
+    property alias copyEnabled:    jqTextField.copyEnabled
     property alias textFieldWidth: jqTextField.width
 
     JQTextField {

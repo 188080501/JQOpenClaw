@@ -14,5 +14,26 @@ TextField {
     text: defaultText
 
     property string defaultText
+    property bool copyEnabled: true
+
+    Keys.onPressed: function(event) {
+        if (
+            !jqTextField.copyEnabled &&
+            (
+                event.matches(StandardKey.Copy) ||
+                event.matches(StandardKey.Cut) ||
+                event.matches(StandardKey.SelectAll)
+            )
+        ) {
+            event.accepted = true;
+        }
+    }
+
+    onSelectedTextChanged: {
+        if ( !jqTextField.copyEnabled && jqTextField.selectedText.length > 0 )
+        {
+            jqTextField.deselect();
+        }
+    }
 }
 

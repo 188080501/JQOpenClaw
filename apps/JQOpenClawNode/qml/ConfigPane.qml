@@ -95,6 +95,8 @@ JQPane {
                 titleText: qsTr("网关Token")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24
+                echoMode: TextInput.Password
+                copyEnabled: false
             }
 
             JQSettingsTextField {
@@ -131,6 +133,8 @@ JQPane {
                 titleText: qsTr("文件服务Token")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24
+                echoMode: TextInput.Password
+                copyEnabled: false
             }
 
             JQSettingsTextField {
