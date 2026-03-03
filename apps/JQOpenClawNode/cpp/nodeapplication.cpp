@@ -4,7 +4,6 @@
 // Qt lib import
 #include <limits>
 #include <QAction>
-#include <QApplication>
 #include <QCursor>
 #include <QDateTime>
 #include <QDebug>
@@ -21,7 +20,6 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QStyle>
 #include <QSystemTrayIcon>
 #include <QUuid>
 #include <QUrl>
@@ -447,13 +445,7 @@ void NodeApplication::initializeSystemTray()
         &NodeApplication::onExitActionTriggered
     );
 
-    QIcon trayIcon = QIcon::fromTheme(QStringLiteral("applications-system"));
-    if ( trayIcon.isNull() )
-    {
-        trayIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    }
-
-    trayIcon_ = new QSystemTrayIcon(trayIcon, this);
+    trayIcon_ = new QSystemTrayIcon(QIcon(QStringLiteral(":/icon/icon.ico")), this);
     trayIcon_->setToolTip(QStringLiteral("JQOpenClawNode"));
     connect(
         trayIcon_,

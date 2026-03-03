@@ -23,7 +23,12 @@ SOURCES *= \
     $$PWD/cpp/nodeapplication.cpp
 
 RESOURCES *= \
-    $$PWD/qml/qml.qrc
+    $$PWD/qml/qml.qrc \
+    $$PWD/../../icon/icon.qrc
 
 QML_IMPORT_PATH *= \
     $$PWD/qml
+
+win32 {
+    RC_ICONS = $$PWD/../../icon/icon.ico
+}
