@@ -2,12 +2,16 @@
 #include "nodeapplication.h"
 
 // Qt lib import
+#include <cmath>
 #include <limits>
 #include <QAction>
 #include <QCursor>
 #include <QDateTime>
 #include <QDebug>
+#include <QDir>
 #include <QEventLoop>
+#include <QFile>
+#include <QFileInfo>
 #include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -20,6 +24,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRandomGenerator>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QSystemTrayIcon>
 #include <QUuid>
 #include <QUrl>
@@ -36,12 +43,14 @@
 #include "capabilities/system/systeminput.h"
 #include "crypto/secretbox/secretboxcrypto.h"
 #include "crypto/signing/deviceauth.h"
+#include "openclawprotocol/noderegistrar.h"
 
 namespace
 {
 constexpr int kPairingReconnectIntervalMs = 15000;
 constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
 constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
+constexpr quint16 kDefaultGatewayPort = 18789;
 
 QString extractString(const QJsonObject &object, const QString &key)
 {
@@ -352,14 +361,11 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
 }
 
 NodeApplication::NodeApplication(
-    const NodeOptions &options,
     QObject *mainWindowObject,
     QObject *parent
 ) :
     QObject(parent),
-    options_(options),
     gatewayClient_(this),
-    registrar_(options),
     mainWindowObject_(mainWindowObject),
     pairingReconnectTimer_(this)
 {
@@ -408,6 +414,481 @@ NodeApplication::NodeApplication(
         this,
         &NodeApplication::onPairingReconnectTimeout
     );
+
+    setConfig(defaultConfig());
+    QString loadConfigError;
+    if ( !loadConfigFromDisk(&loadConfigError) )
+    {
+        qWarning().noquote() << loadConfigError;
+    }
+}
+
+void NodeApplication::setMainWindowObject(QObject *mainWindowObject)
+{
+    mainWindowObject_ = mainWindowObject;
+}
+
+bool NodeApplication::saveConfig()
+{
+    QJsonObject normalizedConfig = normalizeConfig(config_);
+    if ( normalizedConfig.value(QStringLiteral("displayName")).toString().trimmed().isEmpty() )
+    {
+        normalizedConfig.insert(QStringLiteral("displayName"), generateDefaultDisplayName());
+    }
+    if ( normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed().isEmpty() )
+    {
+        normalizedConfig.insert(
+            QStringLiteral("nodeId"),
+            QUuid::createUuid().toString(QUuid::WithoutBraces)
+        );
+    }
+
+    QString saveError;
+    if ( !saveConfigToDisk(normalizedConfig, &saveError) )
+    {
+        qCritical().noquote() << saveError;
+        return false;
+    }
+
+    setConfig(normalizedConfig);
+
+    QString reconnectError;
+    if ( !reconnectGatewayFromConfig(&reconnectError) )
+    {
+        if ( !reconnectError.trimmed().isEmpty() )
+        {
+            qWarning().noquote() << reconnectError;
+        }
+    }
+
+    qInfo().noquote() << QStringLiteral("node config saved: %1").arg(configPath_);
+    return true;
+}
+
+QString NodeApplication::generateDefaultDisplayName()
+{
+    const uint suffix = QRandomGenerator::global()->bounded(10000U);
+    return QStringLiteral("JQOpenClawNode-%1").arg(suffix, 4, 10, QLatin1Char('0'));
+}
+
+QJsonObject NodeApplication::defaultConfig()
+{
+    QJsonObject config;
+    config.insert(QStringLiteral("host"), QStringLiteral("127.0.0.1"));
+    config.insert(QStringLiteral("port"), static_cast<int>(kDefaultGatewayPort));
+    config.insert(QStringLiteral("token"), QString());
+    config.insert(QStringLiteral("tls"), false);
+    config.insert(QStringLiteral("displayName"), QString());
+    config.insert(QStringLiteral("nodeId"), QString());
+    config.insert(QStringLiteral("identityPath"), defaultIdentityPath());
+    config.insert(QStringLiteral("fileServerUri"), QString());
+    config.insert(QStringLiteral("fileServerToken"), QString());
+    config.insert(QStringLiteral("modelIdentifier"), QStringLiteral("JQOpenClawNode"));
+    return config;
+}
+
+QJsonObject NodeApplication::normalizeConfig(const QJsonObject &config)
+{
+    QJsonObject normalized = defaultConfig();
+
+    const QJsonValue host = config.value(QStringLiteral("host"));
+    if ( host.isString() )
+    {
+        normalized.insert(QStringLiteral("host"), host.toString().trimmed());
+    }
+
+    const QJsonValue port = config.value(QStringLiteral("port"));
+    if ( port.isDouble() )
+    {
+        const double rawPort = port.toDouble(std::numeric_limits<double>::quiet_NaN());
+        const int parsedPort = static_cast<int>(rawPort);
+        if ( std::isfinite(rawPort) &&
+             ( rawPort == static_cast<double>(parsedPort) ) &&
+             ( parsedPort > 0 ) &&
+             ( parsedPort <= 65535 ) )
+        {
+            normalized.insert(QStringLiteral("port"), parsedPort);
+        }
+    }
+
+    const QJsonValue token = config.value(QStringLiteral("token"));
+    if ( token.isString() )
+    {
+        normalized.insert(QStringLiteral("token"), token.toString());
+    }
+
+    const QJsonValue tls = config.value(QStringLiteral("tls"));
+    if ( tls.isBool() )
+    {
+        normalized.insert(QStringLiteral("tls"), tls.toBool(false));
+    }
+
+    const QJsonValue displayName = config.value(QStringLiteral("displayName"));
+    if ( displayName.isString() )
+    {
+        normalized.insert(QStringLiteral("displayName"), displayName.toString().trimmed());
+    }
+
+    const QJsonValue nodeId = config.value(QStringLiteral("nodeId"));
+    if ( nodeId.isString() )
+    {
+        normalized.insert(QStringLiteral("nodeId"), nodeId.toString().trimmed());
+    }
+
+    const QJsonValue identityPath = config.value(QStringLiteral("identityPath"));
+    if ( identityPath.isString() )
+    {
+        const QString normalizedIdentityPath = identityPath.toString().trimmed();
+        if ( normalizedIdentityPath.isEmpty() )
+        {
+            normalized.insert(QStringLiteral("identityPath"), defaultIdentityPath());
+        }
+        else
+        {
+            normalized.insert(QStringLiteral("identityPath"), normalizedIdentityPath);
+        }
+    }
+
+    const QJsonValue fileServerUri = config.value(QStringLiteral("fileServerUri"));
+    if ( fileServerUri.isString() )
+    {
+        normalized.insert(QStringLiteral("fileServerUri"), fileServerUri.toString().trimmed());
+    }
+
+    const QJsonValue fileServerToken = config.value(QStringLiteral("fileServerToken"));
+    if ( fileServerToken.isString() )
+    {
+        normalized.insert(QStringLiteral("fileServerToken"), fileServerToken.toString());
+    }
+
+    const QJsonValue modelIdentifier = config.value(QStringLiteral("modelIdentifier"));
+    if ( modelIdentifier.isString() )
+    {
+        normalized.insert(QStringLiteral("modelIdentifier"), modelIdentifier.toString().trimmed());
+    }
+
+    return normalized;
+}
+
+QString NodeApplication::defaultIdentityPath()
+{
+    QString appDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation).trimmed();
+    if ( appDataPath.isEmpty() )
+    {
+        appDataPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation).trimmed();
+    }
+    if ( appDataPath.isEmpty() )
+    {
+        appDataPath = QDir::homePath() + QStringLiteral("/.jqopenclawnode");
+    }
+
+    QDir appDataDirectory(appDataPath);
+    return appDataDirectory.filePath(QStringLiteral("identity.json"));
+}
+
+bool NodeApplication::reconnectGatewayFromConfig(QString *error)
+{
+    QString optionsError;
+    const NodeOptions options = buildNodeOptions(&optionsError);
+    if ( !optionsError.isEmpty() )
+    {
+        connectionState_ = ConnectionState::Error;
+        connectionStateDetail_ = optionsError;
+        updateConnectionStatusAction();
+        if ( error != nullptr )
+        {
+            *error = optionsError;
+        }
+        return false;
+    }
+
+    gatewayClient_.setOptions(options);
+
+    stopPairingReconnect();
+    registered_ = false;
+    reconnectingFromConfigSave_ = true;
+    reconnectAfterClose_ = true;
+    connectionState_ = ConnectionState::Connecting;
+    connectionStateDetail_.clear();
+    updateConnectionStatusAction();
+
+    gatewayClient_.close();
+    QTimer::singleShot(
+        200,
+        this,
+        [this]()
+        {
+            if ( !reconnectAfterClose_ )
+            {
+                return;
+            }
+
+            reconnectAfterClose_ = false;
+            gatewayClient_.open();
+        }
+    );
+    return true;
+}
+
+bool NodeApplication::loadConfigFromDisk(QString *error)
+{
+    QString appConfigPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation).trimmed();
+    if ( appConfigPath.isEmpty() )
+    {
+        appConfigPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation).trimmed();
+    }
+    if ( appConfigPath.isEmpty() )
+    {
+        appConfigPath = QDir::homePath() + QStringLiteral("/.jqopenclawnode");
+    }
+
+    QDir appConfigDirectory(appConfigPath);
+    if ( !appConfigDirectory.exists() &&
+         !appConfigDirectory.mkpath(QStringLiteral(".")) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to create config directory: %1")
+                .arg(appConfigDirectory.absolutePath());
+        }
+        return false;
+    }
+
+    configPath_ = appConfigDirectory.filePath(QStringLiteral("config.json"));
+    QFileInfo configFileInfo(configPath_);
+    if ( !configFileInfo.exists() )
+    {
+        QJsonObject defaults = defaultConfig();
+        defaults.insert(QStringLiteral("displayName"), generateDefaultDisplayName());
+        defaults.insert(
+            QStringLiteral("nodeId"),
+            QUuid::createUuid().toString(QUuid::WithoutBraces)
+        );
+        if ( !saveConfigToDisk(defaults, error) )
+        {
+            return false;
+        }
+        setConfig(defaults);
+        return true;
+    }
+
+    QFile configFile(configPath_);
+    if ( !configFile.open(QIODevice::ReadOnly) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to open config file: %1").arg(configPath_);
+        }
+        return false;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument configJson = QJsonDocument::fromJson(
+        configFile.readAll(),
+        &parseError
+    );
+    if ( ( parseError.error != QJsonParseError::NoError ) ||
+         !configJson.isObject() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("invalid config JSON: %1").arg(configPath_);
+        }
+        return false;
+    }
+
+    QJsonObject normalizedConfig = normalizeConfig(configJson.object());
+    bool configChanged = false;
+    if ( normalizedConfig.value(QStringLiteral("displayName")).toString().trimmed().isEmpty() )
+    {
+        normalizedConfig.insert(QStringLiteral("displayName"), generateDefaultDisplayName());
+        configChanged = true;
+    }
+    if ( normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed().isEmpty() )
+    {
+        normalizedConfig.insert(
+            QStringLiteral("nodeId"),
+            QUuid::createUuid().toString(QUuid::WithoutBraces)
+        );
+        configChanged = true;
+    }
+
+    if ( configChanged )
+    {
+        QString saveError;
+        if ( !saveConfigToDisk(normalizedConfig, &saveError) )
+        {
+            if ( error != nullptr )
+            {
+                *error = saveError;
+            }
+            return false;
+        }
+    }
+
+    setConfig(normalizedConfig);
+    return true;
+}
+
+bool NodeApplication::saveConfigToDisk(
+    const QJsonObject &config,
+    QString *error
+) const
+{
+    if ( configPath_.trimmed().isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("config path is empty");
+        }
+        return false;
+    }
+
+    const QFileInfo configFileInfo(configPath_);
+    QDir configDirectory(configFileInfo.absolutePath());
+    if ( !configDirectory.exists() &&
+         !configDirectory.mkpath(QStringLiteral(".")) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to create config directory: %1")
+                .arg(configDirectory.absolutePath());
+        }
+        return false;
+    }
+
+    QSaveFile configFile(configPath_);
+    if ( !configFile.open(QIODevice::WriteOnly | QIODevice::Truncate) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to open config for write: %1").arg(configPath_);
+        }
+        return false;
+    }
+
+    const QByteArray jsonBytes = QJsonDocument(config).toJson(QJsonDocument::Indented);
+    if ( configFile.write(jsonBytes) != jsonBytes.size() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to write config data: %1").arg(configPath_);
+        }
+        configFile.cancelWriting();
+        return false;
+    }
+
+    if ( !configFile.commit() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to commit config file: %1").arg(configPath_);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+NodeOptions NodeApplication::buildNodeOptions(QString *error) const
+{
+    const QJsonObject normalizedConfig = normalizeConfig(config_);
+
+    NodeOptions options;
+    options.host = normalizedConfig.value(QStringLiteral("host")).toString().trimmed();
+    options.port = static_cast<quint16>(
+        normalizedConfig.value(QStringLiteral("port")).toInt(
+            static_cast<int>(kDefaultGatewayPort)
+        )
+    );
+    options.token = normalizedConfig.value(QStringLiteral("token")).toString();
+    options.tls = normalizedConfig.value(QStringLiteral("tls")).toBool(false);
+    options.tlsFingerprint.clear();
+    options.displayName = normalizedConfig.value(QStringLiteral("displayName")).toString().trimmed();
+    options.nodeId = normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed();
+    options.configPath = configPath_;
+    options.identityPath = normalizedConfig.value(QStringLiteral("identityPath")).toString().trimmed();
+    options.fileServerUri = normalizedConfig.value(QStringLiteral("fileServerUri")).toString().trimmed();
+    options.fileServerToken = normalizedConfig.value(QStringLiteral("fileServerToken")).toString();
+    options.deviceFamily = QStringLiteral("windows-pc");
+    options.modelIdentifier = normalizedConfig.value(QStringLiteral("modelIdentifier")).toString().trimmed();
+    options.exitAfterRegister = false;
+
+    if ( options.displayName.isEmpty() )
+    {
+        options.displayName = generateDefaultDisplayName();
+    }
+    if ( options.identityPath.isEmpty() )
+    {
+        options.identityPath = defaultIdentityPath();
+    }
+    if ( options.modelIdentifier.isEmpty() )
+    {
+        options.modelIdentifier = QStringLiteral("JQOpenClawNode");
+    }
+
+    if ( options.host.isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("gateway host is empty");
+        }
+        return options;
+    }
+
+    if ( options.port == 0 )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("gateway port is empty");
+        }
+        return options;
+    }
+
+    if ( options.token.trimmed().isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("gateway token is empty");
+        }
+        return options;
+    }
+
+    if ( !options.fileServerUri.isEmpty() )
+    {
+        const QUrl fileServerUrl(options.fileServerUri);
+        if ( !fileServerUrl.isValid() ||
+             fileServerUrl.scheme().trimmed().isEmpty() ||
+             fileServerUrl.host().trimmed().isEmpty() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("invalid file server uri");
+            }
+            return options;
+        }
+    }
+
+    if ( options.fileServerUri.isEmpty() &&
+         !options.fileServerToken.trimmed().isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file server token requires file server uri");
+        }
+        return options;
+    }
+
+    return options;
+}
+
+QString NodeApplication::configString(
+    const QString &key,
+    const QString &defaultValue
+) const
+{
+    const QJsonValue value = config_.value(key);
+    return value.isString() ? value.toString() : defaultValue;
 }
 
 void NodeApplication::initializeSystemTray()
@@ -491,6 +972,12 @@ void NodeApplication::showMainWindow()
 void NodeApplication::updateConnectionStatusAction()
 {
     const QString statusText = connectionStateDisplayText();
+    if ( statusText != connectionStateText_ )
+    {
+        connectionStateText_ = statusText;
+        emit connectionStateTextChanged(connectionStateText_);
+    }
+
     if ( connectionStatusLabel_ != nullptr )
     {
         QString color = QStringLiteral("#6b7280");
@@ -527,8 +1014,14 @@ void NodeApplication::updateConnectionStatusAction()
         const QString detailText = connectionStateDetail_.trimmed();
         QString trayToolTip = QStringLiteral("JQOpenClawNode\n连接状态：%1")
             .arg(statusText);
+        const bool statusAlreadyContainsDetail = (
+            ( connectionState_ == ConnectionState::Error ) &&
+            !detailText.isEmpty() &&
+            statusText.contains(detailText)
+        );
         if ( ( connectionState_ != ConnectionState::Pairing ) &&
-             !detailText.isEmpty() )
+             !detailText.isEmpty() &&
+             !statusAlreadyContainsDetail )
         {
             trayToolTip.append(
                 QStringLiteral("\n详情：%1").arg(detailText.left(120))
@@ -615,9 +1108,28 @@ void NodeApplication::start()
 {
     initializeSystemTray();
     stopPairingReconnect();
+    reconnectAfterClose_ = false;
+    reconnectingFromConfigSave_ = false;
     connectionState_ = ConnectionState::Connecting;
     connectionStateDetail_.clear();
     updateConnectionStatusAction();
+
+    const QJsonObject normalizedConfig = normalizeConfig(config_);
+    if ( normalizedConfig != config_ )
+    {
+        setConfig(normalizedConfig);
+    }
+
+    QString optionsError;
+    const NodeOptions options = buildNodeOptions(&optionsError);
+    if ( !optionsError.isEmpty() )
+    {
+        connectionState_ = ConnectionState::Error;
+        connectionStateDetail_ = optionsError;
+        updateConnectionStatusAction();
+        qWarning().noquote() << optionsError;
+        return;
+    }
 
     QString initError;
     if ( !DeviceAuth::initialize(&initError) )
@@ -630,7 +1142,7 @@ void NodeApplication::start()
         return;
     }
 
-    DeviceIdentityStore store(options_.identityPath);
+    DeviceIdentityStore store(options.identityPath);
     QString identityError;
     if ( !store.loadOrCreate(&identity_, &identityError) )
     {
@@ -655,13 +1167,13 @@ void NodeApplication::start()
 
     qInfo().noquote() << QStringLiteral("device identity: %1").arg(identity_.deviceId);
     qInfo().noquote() << QStringLiteral("identity file: %1").arg(store.identityPath());
-    const QString configuredNodeId = options_.nodeId.trimmed();
+    const QString configuredNodeId = options.nodeId.trimmed();
     if ( !configuredNodeId.isEmpty() )
     {
         qInfo().noquote() << QStringLiteral("node instance id: %1").arg(configuredNodeId);
     }
 
-    gatewayClient_.setOptions(options_);
+    gatewayClient_.setOptions(options);
     gatewayClient_.open();
 }
 
@@ -673,6 +1185,8 @@ void NodeApplication::onChallengeReceived(const QString &nonce)
 void NodeApplication::onConnectAccepted(const QJsonObject &payload)
 {
     stopPairingReconnect();
+    reconnectAfterClose_ = false;
+    reconnectingFromConfigSave_ = false;
     registered_ = true;
     connectionState_ = ConnectionState::Connected;
     connectionStateDetail_.clear();
@@ -689,10 +1203,6 @@ void NodeApplication::onConnectAccepted(const QJsonObject &payload)
         qInfo().noquote() << QStringLiteral("node registered successfully, device token issued");
     }
 
-    if ( options_.exitAfterRegister )
-    {
-        emit finished(0);
-    }
 }
 
 void NodeApplication::onConnectRejected(const QJsonObject &error)
@@ -707,6 +1217,10 @@ void NodeApplication::onConnectRejected(const QJsonObject &error)
 
 void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 {
+    setLastInvokeTime(
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))
+    );
+
     const QString invokeId = extractString(payload, QStringLiteral("id"));
     const QString nodeId = extractString(payload, QStringLiteral("nodeId"));
     const QString command = extractString(payload, QStringLiteral("command"));
@@ -1052,6 +1566,12 @@ void NodeApplication::onTransportError(const QString &message)
     qCritical().noquote() << message;
     if ( !registered_ )
     {
+        if ( reconnectingFromConfigSave_ )
+        {
+            qWarning().noquote() << QStringLiteral("transport error after config save, keep process alive");
+            return;
+        }
+
         if ( pairingInProgress )
         {
             qInfo().noquote() << QStringLiteral("transport error while pairing, keep process alive");
@@ -1063,6 +1583,16 @@ void NodeApplication::onTransportError(const QString &message)
 
 void NodeApplication::onGatewayClosed()
 {
+    if ( reconnectAfterClose_ )
+    {
+        reconnectAfterClose_ = false;
+        connectionState_ = ConnectionState::Connecting;
+        connectionStateDetail_.clear();
+        updateConnectionStatusAction();
+        gatewayClient_.open();
+        return;
+    }
+
     if ( connectionState_ == ConnectionState::Pairing )
     {
         connectionStateDetail_ = QStringLiteral("等待配对完成");
@@ -1078,14 +1608,17 @@ void NodeApplication::onGatewayClosed()
 
     if ( !registered_ )
     {
+        if ( reconnectingFromConfigSave_ )
+        {
+            qWarning().noquote() << QStringLiteral("gateway closed after config save, keep process alive");
+            return;
+        }
+
         emit finished(1);
         return;
     }
 
-    if ( !options_.exitAfterRegister )
-    {
-        emit finished(3);
-    }
+    emit finished(3);
 }
 
 void NodeApplication::onPairingReconnectTimeout()
@@ -1290,6 +1823,8 @@ bool NodeApplication::executeInvokeCommand(
     {
         QList<SystemScreenshot::CaptureResult> captures;
         QString captureError;
+        const QString fileServerUri = configString(QStringLiteral("fileServerUri")).trimmed();
+        const QString fileServerToken = configString(QStringLiteral("fileServerToken"));
         if ( !SystemScreenshot::captureAllToJpg(&captures, &captureError) )
         {
             if ( errorCode != nullptr )
@@ -1321,8 +1856,8 @@ bool NodeApplication::executeInvokeCommand(
             QString uploadError;
             if ( !uploadScreenshotFile(
                     captureResult.jpgBytes,
-                    options_.fileServerUri,
-                    options_.fileServerToken,
+                    fileServerUri,
+                    fileServerToken,
                     &fileUrl,
                     &uploadError
                 ) )
@@ -1584,9 +2119,19 @@ void NodeApplication::sendInvokeError(
 
 void NodeApplication::sendConnectRequest(const QString &nonce)
 {
+    QString optionsError;
+    const NodeOptions options = buildNodeOptions(&optionsError);
+    if ( !optionsError.isEmpty() )
+    {
+        qCritical().noquote() << optionsError;
+        emit finished(1);
+        return;
+    }
+
+    NodeRegistrar registrar(options);
     QJsonObject params;
     QString error;
-    if ( !registrar_.buildConnectParams(identity_, nonce, &params, &error) )
+    if ( !registrar.buildConnectParams(identity_, nonce, &params, &error) )
     {
         qCritical().noquote() << error;
         emit finished(1);

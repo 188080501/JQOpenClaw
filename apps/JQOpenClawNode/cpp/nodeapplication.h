@@ -16,7 +16,6 @@
 // JQOpenClaw import
 #include "crypto/deviceidentity/deviceidentity.h"
 #include "openclawprotocol/gatewayclient.h"
-#include "openclawprotocol/noderegistrar.h"
 #include "openclawprotocol/nodeoptions.h"
 
 class QAction;
@@ -29,15 +28,18 @@ class NodeApplication : public QObject
     Q_OBJECT
 
     Q_PROPERTY( ConnectionState connectionState READ connectionState WRITE setConnectionState NOTIFY connectionStateChanged )
+    Q_PROPERTY( QString connectionStateText READ connectionStateText NOTIFY connectionStateTextChanged )
+    Q_PROPERTY( QString lastInvokeTime READ lastInvokeTime NOTIFY lastInvokeTimeChanged )
     Q_PROPERTY( QJsonObject config READ config WRITE setConfig NOTIFY configChanged )
 
 public:
     explicit NodeApplication(
-        const NodeOptions &options,
         QObject *mainWindowObject = nullptr,
         QObject *parent = nullptr
     );
 
+    Q_INVOKABLE bool saveConfig();
+    void setMainWindowObject(QObject *mainWindowObject);
     void start();
 
 signals:
@@ -94,6 +96,18 @@ private:
     );
     void sendConnectRequest(const QString &nonce);
     static QString parseErrorMessage(const QJsonObject &errorObject);
+    static QString generateDefaultDisplayName();
+    static QJsonObject defaultConfig();
+    static QJsonObject normalizeConfig(const QJsonObject &config);
+    static QString defaultIdentityPath();
+    bool reconnectGatewayFromConfig(QString *error);
+    bool loadConfigFromDisk(QString *error);
+    bool saveConfigToDisk(const QJsonObject &config, QString *error) const;
+    NodeOptions buildNodeOptions(QString *error) const;
+    QString configString(
+        const QString &key,
+        const QString &defaultValue = QString()
+    ) const;
 
     struct InvokeReplayTarget
     {
@@ -113,10 +127,8 @@ private:
         QList<InvokeReplayTarget> waitingTargets;
     };
 
-    NodeOptions options_;
     DeviceIdentity identity_;
     GatewayClient gatewayClient_;
-    NodeRegistrar registrar_;
     QPointer< QObject > mainWindowObject_;
     QSystemTrayIcon *trayIcon_ = nullptr;
     QMenu *trayMenu_ = nullptr;
@@ -129,12 +141,23 @@ private:
     QTimer pairingReconnectTimer_;
     QHash<QString, InvokeIdempotencyEntry> invokeIdempotencyCache_;
     QStringList invokeIdempotencyCacheOrder_;
+    QString configPath_;
+    bool reconnectAfterClose_ = false;
+    bool reconnectingFromConfigSave_ = false;
 
     // Property statement code start
 private: ConnectionState connectionState_ = ConnectionState::Disconnected;
 public: inline ConnectionState connectionState() const;
 public: inline void setConnectionState(const ConnectionState &newValue);
     Q_SIGNAL void connectionStateChanged(const ConnectionState connectionState);
+private: QString connectionStateText_ = QStringLiteral("未连接");
+public: inline QString connectionStateText() const;
+    Q_SIGNAL void connectionStateTextChanged(const QString connectionStateText);
+
+private: QString lastInvokeTime_ = QStringLiteral("无");
+public: inline QString lastInvokeTime() const;
+public: inline void setLastInvokeTime(const QString &newValue);
+    Q_SIGNAL void lastInvokeTimeChanged(const QString lastInvokeTime);
 
 private: QJsonObject config_;
 public: inline QJsonObject config() const;

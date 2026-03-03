@@ -34,22 +34,6 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 - `process.manage` 当前仅支持 Windows；非 Windows 环境会返回 `PROCESS_MANAGE_FAILED`。
 - `process.manage(operation=kill)` 默认拒绝终止关键进程（critical process）；仅当目标 PID 为当前节点进程时允许。
 
-## 运行参数
-
-| 参数 | 说明 | 必填 |
-| --- | --- | --- |
-| `--host <ip-or-host>` | Gateway 地址 | 是 |
-| `--port <port>` | Gateway 端口 | 是 |
-| `--token <gateway-token>` | Gateway 认证令牌 | 是 |
-| `--tls` | 启用 TLS 连接 | 否 |
-| `--tls-fingerprint <sha256>` | TLS 证书指纹固定 | 否 |
-| `--display-name <name>` | 节点显示名 | 否 |
-| `--node-id <id>` | 节点标识 | 否 |
-| `--model-identifier <model>` | 节点实现标识（上报到 `connect.client.modelIdentifier`） | 否 |
-| `--file-server-uri <uri>` | 文件服务器基础地址 | 否（截图上传时必需） |
-| `--file-server-token <token>` | 文件服务器鉴权 token（`X-Token`） | 否（截图上传时必需） |
-| `--config <path>` | 配置文件路径 | 否 |
-
 ## Node 整体运行流程
 
 1. 解析启动参数（host/port/token/tls 等）。
