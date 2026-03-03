@@ -7,7 +7,7 @@ import "../"
 JQSettingsRow {
     id: jqSettingsTextField
 
-    property alias text:           jqTextField.text // 文本属性使用Text
+    property alias text:           jqTextField.text 
     property alias defaultText:    jqTextField.defaultText
     property alias maximumLength:  jqTextField.maximumLength
     property alias readOnly:       jqTextField.readOnly

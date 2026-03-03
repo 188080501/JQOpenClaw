@@ -1,4 +1,4 @@
-import QtQuick
+Ôªøimport QtQuick
 import QtQuick.Window
 import "./"
 
@@ -11,8 +11,8 @@ Window {
     color: "#f4f4f4"
     visible: false
 
-    // ∂‘Õ‚ Ù–‘
-    property bool enabledAutoShowMaximized: true
+    // ÂØπÂ§ñÂ±ûÊÄß
+    property bool enabledAutoShowMaximized: false
 
     property int autoMaximizedBindWidth: 1920
 
