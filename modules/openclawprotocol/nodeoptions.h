@@ -2,6 +2,7 @@
 #define JQOPENCLAW_NODE_NODEOPTIONS_H_
 
 // Qt lib import
+#include <QJsonObject>
 #include <QString>
 
 struct NodeOptions
@@ -18,6 +19,7 @@ struct NodeOptions
     QString fileServerToken;
     QString deviceFamily = "windows-pc";
     QString modelIdentifier = "JQOpenClawNode";
+    QJsonObject commandPermissions;
     bool exitAfterRegister = false;
 };
 

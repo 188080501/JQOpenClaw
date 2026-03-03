@@ -50,6 +50,10 @@ Window {
                 width: parent.width
             }
 
+            PermissionPane {
+                width: parent.width
+            }
+
             SoftwarePane {
                 width: parent.width
             }

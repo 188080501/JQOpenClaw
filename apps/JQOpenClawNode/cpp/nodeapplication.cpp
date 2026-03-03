@@ -43,6 +43,7 @@
 #include "crypto/secretbox/secretboxcrypto.h"
 #include "crypto/signing/deviceauth.h"
 #include "openclawprotocol/noderegistrar.h"
+#include "openclawprotocol/nodeprofile.h"
 
 namespace
 {
@@ -636,6 +637,7 @@ QJsonObject NodeApplication::defaultConfig()
     config.insert(QStringLiteral("fileServerUrl"), QString());
     config.insert(QStringLiteral("fileServerToken"), QString());
     config.insert(QStringLiteral("modelIdentifier"), QStringLiteral("JQOpenClawNode"));
+    config.insert(QStringLiteral("permissions"), NodeProfile::permissions());
     return config;
 }
 
@@ -715,6 +717,15 @@ QJsonObject NodeApplication::normalizeConfig(const QJsonObject &config)
     if ( modelIdentifier.isString() )
     {
         normalized.insert(QStringLiteral("modelIdentifier"), modelIdentifier.toString().trimmed());
+    }
+
+    const QJsonValue permissions = config.value(QStringLiteral("permissions"));
+    if ( permissions.isObject() )
+    {
+        normalized.insert(
+            QStringLiteral("permissions"),
+            NodeProfile::normalizePermissions(permissions.toObject())
+        );
     }
 
     return normalized;
@@ -957,6 +968,9 @@ NodeOptions NodeApplication::buildNodeOptions(QString *error) const
     options.fileServerToken = normalizedConfig.value(QStringLiteral("fileServerToken")).toString();
     options.deviceFamily = QStringLiteral("windows-pc");
     options.modelIdentifier = normalizedConfig.value(QStringLiteral("modelIdentifier")).toString().trimmed();
+    options.commandPermissions = NodeProfile::normalizePermissions(
+        normalizedConfig.value(QStringLiteral("permissions")).toObject()
+    );
     options.exitAfterRegister = false;
 
     if ( options.displayName.isEmpty() )
@@ -1936,6 +1950,23 @@ bool NodeApplication::executeInvokeCommand(
         if ( errorMessage != nullptr )
         {
             *errorMessage = QStringLiteral("invoke payload output pointer is null");
+        }
+        return false;
+    }
+
+    const QJsonObject permissions = NodeProfile::normalizePermissions(
+        normalizeConfig(config_).value(QStringLiteral("permissions")).toObject()
+    );
+    if ( NodeProfile::isKnownCommand(command) &&
+         !NodeProfile::isCommandEnabled(command, permissions) )
+    {
+        if ( errorCode != nullptr )
+        {
+            *errorCode = QStringLiteral("PERMISSION_DENIED");
+        }
+        if ( errorMessage != nullptr )
+        {
+            *errorMessage = QStringLiteral("command disabled by node permission: %1").arg(command);
         }
         return false;
     }

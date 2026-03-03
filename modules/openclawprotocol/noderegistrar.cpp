@@ -109,7 +109,10 @@ bool NodeRegistrar::buildConnectParams(
     connectParams.insert("scopes", QJsonArray());
     connectParams.insert("caps", NodeProfile::caps());
     connectParams.insert("commands", NodeProfile::commands());
-    connectParams.insert("permissions", NodeProfile::permissions());
+    connectParams.insert(
+        "permissions",
+        NodeProfile::permissions(options_.commandPermissions)
+    );
     connectParams.insert("locale", QLocale::system().name().replace('_', '-'));
     connectParams.insert(
         "userAgent",

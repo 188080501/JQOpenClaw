@@ -150,7 +150,7 @@ JQPane {
             anchors.right: parent.right
 
             JQButton {
-                text: qsTr("保存配置")
+                text: qsTr("保存")
                 width: 120
                 height: 50
 

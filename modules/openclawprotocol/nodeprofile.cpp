@@ -23,6 +23,20 @@ const CapabilityDeclaration capabilityDeclarations[] =
     {"system", "system.info", true},
     {"system", "system.input", true},
 };
+
+bool resolvePermission(
+    const CapabilityDeclaration &declaration,
+    const QJsonObject &overrides
+)
+{
+    const QString command = QString::fromLatin1(declaration.command);
+    const QJsonValue overrideValue = overrides.value(command);
+    if ( overrideValue.isBool() )
+    {
+        return overrideValue.toBool(declaration.permissionGranted);
+    }
+    return declaration.permissionGranted;
+}
 }
 
 int NodeProfile::minProtocolVersion()
@@ -79,13 +93,50 @@ QJsonArray NodeProfile::commands()
 
 QJsonObject NodeProfile::permissions()
 {
+    return permissions(QJsonObject());
+}
+
+QJsonObject NodeProfile::permissions(const QJsonObject &overrides)
+{
     QJsonObject out;
     for ( const auto &declaration : capabilityDeclarations )
     {
         out.insert(
             QString::fromLatin1(declaration.command),
-            declaration.permissionGranted
+            resolvePermission(declaration, overrides)
         );
     }
     return out;
+}
+
+QJsonObject NodeProfile::normalizePermissions(const QJsonObject &candidate)
+{
+    return permissions(candidate);
+}
+
+bool NodeProfile::isKnownCommand(const QString &command)
+{
+    for ( const auto &declaration : capabilityDeclarations )
+    {
+        if ( command == QString::fromLatin1(declaration.command) )
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool NodeProfile::isCommandEnabled(
+    const QString &command,
+    const QJsonObject &overrides
+)
+{
+    for ( const auto &declaration : capabilityDeclarations )
+    {
+        if ( command == QString::fromLatin1(declaration.command) )
+        {
+            return resolvePermission(declaration, overrides);
+        }
+    }
+    return false;
 }

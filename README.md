@@ -60,10 +60,8 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 | `token` | 是 | 空 | Gateway token。为空会导致连接失败。 |
 | `displayName` | 否 | 自动生成（如 `JQOpenClawNode-1234`） | 节点显示名称。 |
 | `nodeId` | 否 | 首次启动自动生成 UUID | 节点实例 ID。 |
-| `identityPath` | 否 | 自动路径（`identity.json`） | 设备身份文件路径。 |
 | `fileServerUrl` | 否 | 空 | 文件服务基础 URL，用于截图上传。 |
 | `fileServerToken` | 条件必填 | 空 | 当使用 `system.screenshot` 上传时必填。 |
-| `modelIdentifier` | 否 | `JQOpenClawNode` | 节点模型标识。 |
 | `followSystemStartup` | 否 | `false` | 是否开机自启动。 |
 | `silentStartup` | 否 | `false` | 是否静默启动（下次启动生效）。 |
 
