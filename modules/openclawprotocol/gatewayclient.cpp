@@ -274,6 +274,5 @@ void GatewayClient::onSslErrors(const QList<QSslError> &errors)
 
 QString GatewayClient::gatewayUrl() const
 {
-    const QString scheme = options_.tls ? QStringLiteral("wss") : QStringLiteral("ws");
-    return QStringLiteral("%1://%2:%3").arg(scheme, options_.host, QString::number(options_.port));
+    return options_.gatewayUrl.trimmed();
 }

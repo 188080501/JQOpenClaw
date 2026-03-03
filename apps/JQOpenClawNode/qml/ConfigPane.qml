@@ -13,38 +13,6 @@ JQPane {
         return defaultValue;
     }
 
-    function readBool(configObject, key, defaultValue) {
-        if ( configObject && ( typeof configObject[key] === "boolean" ) )
-        {
-            return configObject[key];
-        }
-        return defaultValue;
-    }
-
-    function readInt(configObject, key, defaultValue) {
-        if ( !configObject )
-        {
-            return defaultValue;
-        }
-
-        var rawValue = Number( configObject[key] );
-        if ( !isFinite( rawValue ) )
-        {
-            return defaultValue;
-        }
-
-        rawValue = Math.floor( rawValue );
-        if ( rawValue < 1 )
-        {
-            return defaultValue;
-        }
-        if ( rawValue > 65535 )
-        {
-            return 65535;
-        }
-        return rawValue;
-    }
-
     function cloneConfig(configObject) {
         if ( !configObject )
         {
@@ -62,28 +30,24 @@ JQPane {
     }
 
     function applyConfig(configObject) {
-        gatewayHost.text = readString( configObject, "host", "127.0.0.1" );
-        gatewayPort.value = readInt( configObject, "port", 18789 );
+        gatewayUrl.text = readString( configObject, "gatewayUrl", "ws://127.0.0.1:18789" );
         gatewayToken.text = readString( configObject, "token", "" );
-        tlsEnabled.checked = readBool( configObject, "tls", false );
         displayName.text = readString( configObject, "displayName", "" );
         nodeId.text = readString( configObject, "nodeId", "" );
         identityPath.text = readString( configObject, "identityPath", "" );
-        fileServerUri.text = readString( configObject, "fileServerUri", "" );
+        fileServerUrl.text = readString( configObject, "fileServerUrl", "" );
         fileServerToken.text = readString( configObject, "fileServerToken", "" );
         modelIdentifier.text = readString( configObject, "modelIdentifier", "" );
     }
 
     function buildConfig() {
         var nextConfig = cloneConfig( nodeApplication ? nodeApplication.config : null );
-        nextConfig.host = gatewayHost.text.trim();
-        nextConfig.port = gatewayPort.value;
+        nextConfig.gatewayUrl = gatewayUrl.text.trim();
         nextConfig.token = gatewayToken.text;
-        nextConfig.tls = tlsEnabled.checked;
         nextConfig.displayName = displayName.text.trim();
         nextConfig.nodeId = nodeId.text.trim();
         nextConfig.identityPath = identityPath.text.trim();
-        nextConfig.fileServerUri = fileServerUri.text.trim();
+        nextConfig.fileServerUrl = fileServerUrl.text.trim();
         nextConfig.fileServerToken = fileServerToken.text;
         nextConfig.modelIdentifier = modelIdentifier.text.trim();
         return nextConfig;
@@ -120,25 +84,10 @@ JQPane {
             spacing: 8
 
             JQSettingsTextField {
-                id: gatewayHost
-                titleText: qsTr("网关地址")
+                id: gatewayUrl
+                titleText: qsTr("网关URL")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24
-            }
-
-            JQSettingsCheckBox {
-                id: tlsEnabled
-                titleText: qsTr("启用TLS")
-                titleWidth: 170
-            }
-
-            JQSettingsSpinBox {
-                id: gatewayPort
-                titleText: qsTr("网关端口")
-                titleWidth: 170
-                from: 1
-                to: 65535
-                value: 18789
             }
 
             JQSettingsTextField {
@@ -171,8 +120,8 @@ JQPane {
             }
 
             JQSettingsTextField {
-                id: fileServerUri
-                titleText: qsTr("文件服务URI")
+                id: fileServerUrl
+                titleText: qsTr("文件服务URL")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24
             }

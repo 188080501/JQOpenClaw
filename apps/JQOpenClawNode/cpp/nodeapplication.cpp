@@ -2,7 +2,6 @@
 #include "nodeapplication.h"
 
 // Qt lib import
-#include <cmath>
 #include <limits>
 #include <QAction>
 #include <QCursor>
@@ -50,7 +49,7 @@ namespace
 constexpr int kPairingReconnectIntervalMs = 15000;
 constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
 constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
-constexpr quint16 kDefaultGatewayPort = 18789;
+constexpr auto kDefaultGatewayUrl = "ws://127.0.0.1:18789";
 
 QString startupCommandLine()
 {
@@ -238,12 +237,12 @@ QString normalizeBasePath(const QString &path)
 }
 
 QUrl buildFileServerUrl(
-    const QString &baseUri,
+    const QString &baseUrl,
     const QString &segment,
     const QString &fileName
 )
 {
-    QUrl url(baseUri.trimmed());
+    QUrl url(baseUrl.trimmed());
     const QString basePath = normalizeBasePath(url.path());
     const QString path = QStringLiteral("%1/%2/%3")
         .arg(basePath, segment, fileName);
@@ -260,7 +259,7 @@ QString generateScreenshotFileName()
 
 bool uploadScreenshotFile(
     const QByteArray &imageBytes,
-    const QString &fileServerUri,
+    const QString &fileServerUrl,
     const QString &fileServerToken,
     QString *fileUrl,
     QString *error
@@ -275,12 +274,12 @@ bool uploadScreenshotFile(
         return false;
     }
 
-    const QString normalizedUri = fileServerUri.trimmed();
-    if ( normalizedUri.isEmpty() )
+    const QString normalizedUrl = fileServerUrl.trimmed();
+    if ( normalizedUrl.isEmpty() )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("file server uri is empty");
+            *error = QStringLiteral("file server url is empty");
         }
         return false;
     }
@@ -296,7 +295,7 @@ bool uploadScreenshotFile(
     }
 
     const QString fileName = generateScreenshotFileName();
-    const QUrl uploadUrl = buildFileServerUrl(normalizedUri, QStringLiteral("upload"), fileName);
+    const QUrl uploadUrl = buildFileServerUrl(normalizedUrl, QStringLiteral("upload"), fileName);
     if ( !uploadUrl.isValid() )
     {
         if ( error != nullptr )
@@ -358,7 +357,7 @@ bool uploadScreenshotFile(
         return false;
     }
 
-    const QUrl fileAccessUrl = buildFileServerUrl(normalizedUri, QStringLiteral("files"), fileName);
+    const QUrl fileAccessUrl = buildFileServerUrl(normalizedUrl, QStringLiteral("files"), fileName);
     if ( !fileAccessUrl.isValid() )
     {
         if ( error != nullptr )
@@ -627,16 +626,14 @@ QString NodeApplication::generateDefaultDisplayName()
 QJsonObject NodeApplication::defaultConfig()
 {
     QJsonObject config;
-    config.insert(QStringLiteral("host"), QStringLiteral("127.0.0.1"));
-    config.insert(QStringLiteral("port"), static_cast<int>(kDefaultGatewayPort));
+    config.insert(QStringLiteral("gatewayUrl"), QString::fromLatin1(kDefaultGatewayUrl));
     config.insert(QStringLiteral("token"), QString());
-    config.insert(QStringLiteral("tls"), false);
     config.insert(QStringLiteral("followSystemStartup"), false);
     config.insert(QStringLiteral("silentStartup"), false);
     config.insert(QStringLiteral("displayName"), QString());
     config.insert(QStringLiteral("nodeId"), QString());
     config.insert(QStringLiteral("identityPath"), defaultIdentityPath());
-    config.insert(QStringLiteral("fileServerUri"), QString());
+    config.insert(QStringLiteral("fileServerUrl"), QString());
     config.insert(QStringLiteral("fileServerToken"), QString());
     config.insert(QStringLiteral("modelIdentifier"), QStringLiteral("JQOpenClawNode"));
     return config;
@@ -646,36 +643,16 @@ QJsonObject NodeApplication::normalizeConfig(const QJsonObject &config)
 {
     QJsonObject normalized = defaultConfig();
 
-    const QJsonValue host = config.value(QStringLiteral("host"));
-    if ( host.isString() )
+    const QJsonValue gatewayUrl = config.value(QStringLiteral("gatewayUrl"));
+    if ( gatewayUrl.isString() )
     {
-        normalized.insert(QStringLiteral("host"), host.toString().trimmed());
-    }
-
-    const QJsonValue port = config.value(QStringLiteral("port"));
-    if ( port.isDouble() )
-    {
-        const double rawPort = port.toDouble(std::numeric_limits<double>::quiet_NaN());
-        const int parsedPort = static_cast<int>(rawPort);
-        if ( std::isfinite(rawPort) &&
-             ( rawPort == static_cast<double>(parsedPort) ) &&
-             ( parsedPort > 0 ) &&
-             ( parsedPort <= 65535 ) )
-        {
-            normalized.insert(QStringLiteral("port"), parsedPort);
-        }
+        normalized.insert(QStringLiteral("gatewayUrl"), gatewayUrl.toString().trimmed());
     }
 
     const QJsonValue token = config.value(QStringLiteral("token"));
     if ( token.isString() )
     {
         normalized.insert(QStringLiteral("token"), token.toString());
-    }
-
-    const QJsonValue tls = config.value(QStringLiteral("tls"));
-    if ( tls.isBool() )
-    {
-        normalized.insert(QStringLiteral("tls"), tls.toBool(false));
     }
 
     const QJsonValue followSystemStartup = config.value(QStringLiteral("followSystemStartup"));
@@ -722,10 +699,10 @@ QJsonObject NodeApplication::normalizeConfig(const QJsonObject &config)
         }
     }
 
-    const QJsonValue fileServerUri = config.value(QStringLiteral("fileServerUri"));
-    if ( fileServerUri.isString() )
+    const QJsonValue fileServerUrl = config.value(QStringLiteral("fileServerUrl"));
+    if ( fileServerUrl.isString() )
     {
-        normalized.insert(QStringLiteral("fileServerUri"), fileServerUri.toString().trimmed());
+        normalized.insert(QStringLiteral("fileServerUrl"), fileServerUrl.toString().trimmed());
     }
 
     const QJsonValue fileServerToken = config.value(QStringLiteral("fileServerToken"));
@@ -968,20 +945,15 @@ NodeOptions NodeApplication::buildNodeOptions(QString *error) const
     const QJsonObject normalizedConfig = normalizeConfig(config_);
 
     NodeOptions options;
-    options.host = normalizedConfig.value(QStringLiteral("host")).toString().trimmed();
-    options.port = static_cast<quint16>(
-        normalizedConfig.value(QStringLiteral("port")).toInt(
-            static_cast<int>(kDefaultGatewayPort)
-        )
-    );
+    options.gatewayUrl = normalizedConfig.value(QStringLiteral("gatewayUrl")).toString().trimmed();
     options.token = normalizedConfig.value(QStringLiteral("token")).toString();
-    options.tls = normalizedConfig.value(QStringLiteral("tls")).toBool(false);
+    options.tls = false;
     options.tlsFingerprint.clear();
     options.displayName = normalizedConfig.value(QStringLiteral("displayName")).toString().trimmed();
     options.nodeId = normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed();
     options.configPath = configPath_;
     options.identityPath = normalizedConfig.value(QStringLiteral("identityPath")).toString().trimmed();
-    options.fileServerUri = normalizedConfig.value(QStringLiteral("fileServerUri")).toString().trimmed();
+    options.fileServerUrl = normalizedConfig.value(QStringLiteral("fileServerUrl")).toString().trimmed();
     options.fileServerToken = normalizedConfig.value(QStringLiteral("fileServerToken")).toString();
     options.deviceFamily = QStringLiteral("windows-pc");
     options.modelIdentifier = normalizedConfig.value(QStringLiteral("modelIdentifier")).toString().trimmed();
@@ -1000,23 +972,31 @@ NodeOptions NodeApplication::buildNodeOptions(QString *error) const
         options.modelIdentifier = QStringLiteral("JQOpenClawNode");
     }
 
-    if ( options.host.isEmpty() )
+    if ( options.gatewayUrl.isEmpty() )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("gateway host is empty");
+            *error = QStringLiteral("gateway url is empty");
         }
         return options;
     }
 
-    if ( options.port == 0 )
+    const QUrl gatewayUrl(options.gatewayUrl);
+    const QString gatewayScheme = gatewayUrl.scheme().trimmed().toLower();
+    if ( !gatewayUrl.isValid() ||
+         gatewayScheme.isEmpty() ||
+         gatewayUrl.host().trimmed().isEmpty() ||
+         ( gatewayScheme != QStringLiteral("ws") &&
+           gatewayScheme != QStringLiteral("wss") ) )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("gateway port is empty");
+            *error = QStringLiteral("invalid gateway url");
         }
         return options;
     }
+    options.tls = ( gatewayScheme == QStringLiteral("wss") );
+    options.gatewayUrl = gatewayUrl.toString(QUrl::FullyEncoded);
 
     if ( options.token.trimmed().isEmpty() )
     {
@@ -1027,29 +1007,19 @@ NodeOptions NodeApplication::buildNodeOptions(QString *error) const
         return options;
     }
 
-    if ( !options.fileServerUri.isEmpty() )
+    if ( !options.fileServerUrl.isEmpty() )
     {
-        const QUrl fileServerUrl(options.fileServerUri);
+        const QUrl fileServerUrl(options.fileServerUrl);
         if ( !fileServerUrl.isValid() ||
              fileServerUrl.scheme().trimmed().isEmpty() ||
              fileServerUrl.host().trimmed().isEmpty() )
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("invalid file server uri");
+                *error = QStringLiteral("invalid file server url");
             }
             return options;
         }
-    }
-
-    if ( options.fileServerUri.isEmpty() &&
-         !options.fileServerToken.trimmed().isEmpty() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file server token requires file server uri");
-        }
-        return options;
     }
 
     return options;
@@ -1960,7 +1930,7 @@ bool NodeApplication::executeInvokeCommand(
     {
         QList<SystemScreenshot::CaptureResult> captures;
         QString captureError;
-        const QString fileServerUri = configString(QStringLiteral("fileServerUri")).trimmed();
+        const QString fileServerUrl = configString(QStringLiteral("fileServerUrl")).trimmed();
         const QString fileServerToken = configString(QStringLiteral("fileServerToken"));
         if ( !SystemScreenshot::captureAllToJpg(&captures, &captureError) )
         {
@@ -1993,7 +1963,7 @@ bool NodeApplication::executeInvokeCommand(
             QString uploadError;
             if ( !uploadScreenshotFile(
                     captureResult.jpgBytes,
-                    fileServerUri,
+                    fileServerUrl,
                     fileServerToken,
                     &fileUrl,
                     &uploadError
