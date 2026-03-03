@@ -25,11 +25,12 @@ QString extractString(const QJsonObject &object, const QString &key)
     return value.isString() ? value.toString() : QString();
 }
 
-bool shouldLogEvent(const QString &eventName)
+bool shouldHandleNodeEvent(const QString &eventName)
 {
     return eventName == QStringLiteral("connect.challenge") ||
         eventName == QStringLiteral("node.invoke.request");
 }
+
 }
 
 GatewayClient::GatewayClient(QObject *parent) :
@@ -196,10 +197,12 @@ void GatewayClient::onTextMessageReceived(const QString &message)
     if ( frameType == "event" )
     {
         const QString eventName = extractString(root, "event");
-        if ( shouldLogEvent(eventName) )
+        if ( !shouldHandleNodeEvent(eventName) )
         {
-            qInfo().noquote() << QStringLiteral("[gateway.rx.event] %1").arg(eventName);
+            return;
         }
+
+        qInfo().noquote() << QStringLiteral("[gateway.rx.event] %1").arg(eventName);
         if ( eventName == "connect.challenge" )
         {
             const QJsonObject payload = root.value("payload").toObject();
