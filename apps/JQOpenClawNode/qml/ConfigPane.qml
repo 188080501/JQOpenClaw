@@ -93,7 +93,7 @@ JQPane {
         spacing: 12
 
         Text {
-            text: qsTr("节点参数设置")
+            text: qsTr("参数设置")
             font.pixelSize: 20
             font.bold: true
             color: "#111827"
@@ -141,7 +141,7 @@ JQPane {
 
             JQSettingsTextField {
                 id: nodeId
-                titleText: qsTr("节点ID")
+                titleText: qsTr("实例ID")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24
             }
