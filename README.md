@@ -28,28 +28,36 @@ Gateway 是中枢/控制平面，Node 是执行端/能力提供者。
 
 ## 参数说明
 
-| 参数名 | 是否必填 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `网关URL` | 是 | `ws://127.0.0.1:18789` | Gateway WebSocket 地址，只支持 `ws://` 或 `wss://`。 |
-| `网关Token` | 是 | 空 | Gateway token。为空会导致连接失败。 |
-| `显示名称` | 否 | 自动生成（如 `JQOpenClawNode-1234`） | 节点显示名称。 |
-| `实例ID` | 否 | 首次启动自动生成 UUID | 节点实例 ID。 |
-| `文件服务URL` | 否 | 空 | 文件服务基础 URL，用于截图上传。 |
-| `文件服务Token` | 条件必填 | 空 | 当使用 `system.screenshot` 上传时必填。 |
+| 参数名 | 配置键 | 是否必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| 网关URL | `gatewayUrl` | 是 | `ws://127.0.0.1:18789` | Gateway WebSocket 地址，只支持 `ws://` 或 `wss://`。 |
+| 网关Token | `token` | 是 | 空 | Gateway token，留空会导致连接失败。 |
+| 显示名称 | `displayName` | 否 | 自动生成（如 `JQOpenClawNode-1234`） | 节点显示名称。 |
+| 实例ID | `nodeId` | 否 | 首次启动自动生成 UUID | 节点实例 ID。 |
+| 文件服务URL | `fileServerUrl` | 否 | 空 | 文件服务基础 URL（必须是 Nginx 对外入口），用于截图上传。 |
+| 文件服务Token | `fileServerToken` | 条件必填 | 空 | 使用 `system.screenshot` 上传时必填。 |
 
 ### URL 配置注意事项
 
-- `gatewayUrl` 必须是合法 URL，且带 `ws`/`wss` 协议和主机名。
-- `fileServerUrl` 请填写“基础地址”，不要手动加 `/upload` 或 `/files`。
+- `网关URL` 必须是合法 URL，且带 `ws`/`wss` 协议和主机名。
+- 文件服务必须经过 Nginx 中转，Node 会向 Nginx 执行上传并返回访问链接。
+- `文件服务URL` 请填写 Nginx 对外“基础地址”，不要手动加 `/upload` 或 `/files`，也不要填写磁盘目录或对象存储内部地址。
 - 程序会在截图上传时自动拼接：
-  - 上传地址：`<fileServerUrl>/upload/<随机文件名>.jpg`
-  - 访问地址：`<fileServerUrl>/files/<随机文件名>.jpg`
+  - 上传地址：`<文件服务URL>/upload/<随机文件名>.jpg`
+  - 访问地址：`<文件服务URL>/files/<随机文件名>.jpg`
 
 ### 配对成功后在 OpenClaw 中的显示位置
 
 Node 配对成功后，会在 OpenClaw 中显示在如下位置，便于快速确认节点是否已成功接入：
 
 ![Node 配对成功后在 OpenClaw 中的显示位置](docs/images/OpenClaw节点位置.jpg)
+
+## Skill 导入
+
+为保证 Gateway 按正确方式调用 Node 能力，请先导入配套 Skill。
+
+导入入口文件（相对仓库根目录）：
+`docs/skills/jqopenclaw-node-invoker/SKILL.md`
 
 ## 节点能力与命令
 
