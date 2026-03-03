@@ -1,4 +1,4 @@
-// .h include
+﻿// .h include
 #include "openclawprotocol/nodeprofile.h"
 
 // Qt lib import
@@ -42,7 +42,11 @@ QString NodeProfile::clientId()
 
 QString NodeProfile::clientVersion()
 {
-    return QStringLiteral("0.1.0");
+#ifdef JQOPENCLAWNODE_VERSION
+    return JQOPENCLAWNODE_VERSION;
+#else
+    return QStringLiteral("1.0.0");
+#endif
 }
 
 QJsonArray NodeProfile::caps()

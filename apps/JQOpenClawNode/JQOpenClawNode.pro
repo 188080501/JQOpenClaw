@@ -7,12 +7,20 @@ QT += core gui qml quick quickcontrols2 network websockets widgets
 CONFIG += console c++17
 CONFIG -= app_bundle
 
-INCLUDEPATH += $$PWD/../../modules
+VERSION  = 1.0.0
+DEFINES *= JQOPENCLAWNODE_VERSION='\\"$$VERSION\\"'
+
+QMAKE_TARGET_COMPANY     = "JQOpenClaw"
+QMAKE_TARGET_DESCRIPTION = $$TARGET
+QMAKE_TARGET_COPYRIGHT   = "Copyright (c) 2026 Jason and others"
 
 include( $$PWD/../../modules/capabilities.pri )
 include( $$PWD/../../modules/openclawprotocol.pri )
 include( $$PWD/../../modules/crypto.pri )
 include( $$PWD/../../modules/jqcontrols.pri )
+
+INCLUDEPATH *= \
+    $$PWD/../../modules
 
 HEADERS *= \
     $$PWD/cpp/nodeapplication.h \
