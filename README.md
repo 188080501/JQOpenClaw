@@ -1,18 +1,55 @@
 # JQOpenClaw
 
-JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 OpenClaw Gateway 的 Node WebSocket 协议对接。
+JQOpenClaw 是一个基于 Qt/C++ 开发的 OpenClaw Node，实现与 OpenClaw Gateway 的 Node WebSocket 协议对接。
 
-适用于希望在 Windows 上以独立可执行程序接入 OpenClaw 的场景，无需在目标机器额外安装 Node.js 与 OpenClaw CLI。
+适用于希望在 Windows 上以独立可执行程序接入 OpenClaw 的场景，无需额外安装 Node.js 与 OpenClaw CLI。
+
+注意，本项目不是代替OpenClaw Gateway，是实现的OpenClaw Node。
+
+Gateway 是中枢/控制平面，Node 是执行端/能力提供者。
+
+一般来说只需要一个 Gateway，然后可以部署多个 Node，然后用 Gateway 统一调度。
 
 ## 项目定位
 
 - 运行平台：Windows，后期扩展Mac和Linux。
-- 运行形态：单可执行程序（`JQOpenClawNode.exe`）接入 Gateway。
-- 协议兼容：对接 OpenClaw Gateway 的 `node.invoke` 调用链路。
+- 运行形态：免安装，单可执行程序（`JQOpenClawNode.exe`）接入 Gateway。
 - 能力范围：文件、进程、系统信息、截图与输入控制（详见下文“节点能力与命令”）。
-- 开发基线：`Qt 6.5.3 + MSVC`。
-- 连接能力：通过指定 Gateway IP/端口/token 连接 OpenClaw Gateway WebSocket Node 模式。
-- 注册与识别：支持设备注册、设备身份识别与基础链路建立。
+- 开发套件：`Qt 6.5.3 + MSVC`。
+- 协议兼容：对接 OpenClaw Gateway 的 `node.invoke` 调用链路。
+
+## 首次启动
+
+首次启动后，需要手动配置参数，当参数配置完成后，点击```保存```按钮，保存参数后会自动发起WebSocket连接，等待配对。
+
+等待配对时，需要用户在Gateway中批准本节点，才能完成配对。
+
+![参数配置](docs/images/JQOpenClawNode界面.jpg)
+
+## 参数说明
+
+| 参数名 | 是否必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `网关URL` | 是 | `ws://127.0.0.1:18789` | Gateway WebSocket 地址，只支持 `ws://` 或 `wss://`。 |
+| `网关Token` | 是 | 空 | Gateway token。为空会导致连接失败。 |
+| `显示名称` | 否 | 自动生成（如 `JQOpenClawNode-1234`） | 节点显示名称。 |
+| `实例ID` | 否 | 首次启动自动生成 UUID | 节点实例 ID。 |
+| `文件服务URL` | 否 | 空 | 文件服务基础 URL，用于截图上传。 |
+| `文件服务Token` | 条件必填 | 空 | 当使用 `system.screenshot` 上传时必填。 |
+
+### URL 配置注意事项
+
+- `gatewayUrl` 必须是合法 URL，且带 `ws`/`wss` 协议和主机名。
+- `fileServerUrl` 请填写“基础地址”，不要手动加 `/upload` 或 `/files`。
+- 程序会在截图上传时自动拼接：
+  - 上传地址：`<fileServerUrl>/upload/<随机文件名>.jpg`
+  - 访问地址：`<fileServerUrl>/files/<随机文件名>.jpg`
+
+### 配对成功后在 OpenClaw 中的显示位置
+
+Node 配对成功后，会在 OpenClaw 中显示在如下位置，便于快速确认节点是否已成功接入：
+
+![Node 配对成功后在 OpenClaw 中的显示位置](docs/images/OpenClaw节点位置.jpg)
 
 ## 节点能力与命令
 
@@ -26,75 +63,15 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 | `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名/主机名、系统名称/版本、用户名、内存、GPU、IP、硬盘容量）。 |
 | `system` | `system.input` | 输入控制能力，支持动作列表混排：`mouse.move`（绝对/相对）、`mouse.click`（左/右键）、`keyboard.down/up/tap`、`keyboard.text`（文本输入）、`delay`（毫秒延迟）；请求会异步入队并立即返回，若有更新请求到达会取消旧请求剩余动作（latest-wins）。 |
 
-## 调用约定
-
-- 统一通过 Gateway `node.invoke` 调用节点命令。
-- 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。
-- 参数缺失、类型不匹配、超出范围等参数校验失败统一返回 `INVALID_PARAMS`。
-- `process.manage` 当前仅支持 Windows；非 Windows 环境会返回 `PROCESS_MANAGE_FAILED`。
-- `process.manage(operation=kill)` 默认拒绝终止关键进程（critical process）；仅当目标 PID 为当前节点进程时允许。
-
 ## Node 整体运行流程
 
-1. 加载并标准化本地配置（`config.json`）。
-2. 初始化 OpenSSL。
-3. 加载或生成本机设备身份（私钥、公钥、deviceId）。
+1. 手动启动或者开机自启动
+2. 加载并标准化本地配置（`config.json`）。
+3. 初始化 OpenSSL，加载或生成本机设备身份（私钥、公钥、deviceId）。
 4. 建立 WebSocket 连接并等待 challenge。
 5. 使用 challenge nonce 生成签名并发送 `connect`。
 6. 连接成功后上报能力清单。
 7. 进入主循环，处理 Gateway 下发调用并返回结果。
-
-## 参数配置
-
-### 配置入口
-
-- 方式 1（推荐）：启动 `JQOpenClawNode`，在“参数设置”页面填写后点击“保存配置”。
-- 方式 2：直接编辑 `config.json`，重启程序生效。
-- `config.json` 路径由 Qt `QStandardPaths::AppConfigLocation` 决定（Windows 下通常在当前用户配置目录）。
-
-### 参数说明
-
-| 键名 | 是否必填 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `gatewayUrl` | 是 | `ws://127.0.0.1:18789` | Gateway WebSocket 地址，只支持 `ws://` 或 `wss://`。 |
-| `token` | 是 | 空 | Gateway token。为空会导致连接失败。 |
-| `displayName` | 否 | 自动生成（如 `JQOpenClawNode-1234`） | 节点显示名称。 |
-| `nodeId` | 否 | 首次启动自动生成 UUID | 节点实例 ID。 |
-| `fileServerUrl` | 否 | 空 | 文件服务基础 URL，用于截图上传。 |
-| `fileServerToken` | 条件必填 | 空 | 当使用 `system.screenshot` 上传时必填。 |
-| `followSystemStartup` | 否 | `false` | 是否开机自启动。 |
-| `silentStartup` | 否 | `false` | 是否静默启动（下次启动生效）。 |
-
-### 示例配置
-
-```json
-{
-    "gatewayUrl": "wss://gateway.example.com:18789",
-    "token": "your-gateway-token",
-    "followSystemStartup": false,
-    "silentStartup": false,
-    "displayName": "My Windows Node",
-    "nodeId": "0f6d1b8f23d2451f8f8a3a43f3a8a2d1",
-    "identityPath": "C:/Users/YourName/AppData/Roaming/JQOpenClaw/JQOpenClawNode/identity.json",
-    "fileServerUrl": "https://files.example.com:18443",
-    "fileServerToken": "your-file-server-token",
-    "modelIdentifier": "JQOpenClawNode"
-}
-```
-
-### URL 配置注意事项
-
-- `gatewayUrl` 必须是合法 URL，且带 `ws`/`wss` 协议和主机名。
-- `fileServerUrl` 请填写“基础地址”，不要手动加 `/upload` 或 `/files`。
-- 程序会在截图上传时自动拼接：
-  - 上传地址：`<fileServerUrl>/upload/<随机文件名>.jpg`
-  - 访问地址：`<fileServerUrl>/files/<随机文件名>.jpg`
-
-## 配对成功后在 OpenClaw 中的显示位置
-
-Node 配对成功后，会在 OpenClaw 中显示在如下位置，便于快速确认节点是否已成功接入：
-
-![Node 配对成功后在 OpenClaw 中的显示位置](docs/images/OpenClaw节点位置.jpg)
 
 ## 目录结构
 
