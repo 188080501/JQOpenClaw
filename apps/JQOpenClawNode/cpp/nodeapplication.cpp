@@ -719,14 +719,12 @@ QJsonObject NodeApplication::normalizeConfig(const QJsonObject &config)
         normalized.insert(QStringLiteral("modelIdentifier"), modelIdentifier.toString().trimmed());
     }
 
-    const QJsonValue permissions = config.value(QStringLiteral("permissions"));
-    if ( permissions.isObject() )
-    {
-        normalized.insert(
-            QStringLiteral("permissions"),
-            NodeProfile::normalizePermissions(permissions.toObject())
-        );
-    }
+    normalized.insert(
+        QStringLiteral("permissions"),
+        NodeProfile::normalizePermissions(
+            config.value(QStringLiteral("permissions")).toObject()
+        )
+    );
 
     return normalized;
 }

@@ -30,28 +30,6 @@ JQPane {
         }
     }
 
-    function mergePermissions(baseObject, overrideObject) {
-        var result = {};
-        var key = "";
-        for ( key in baseObject )
-        {
-            result[key] = baseObject[key];
-        }
-        if ( !overrideObject || ( typeof overrideObject !== "object" ) )
-        {
-            return result;
-        }
-        for ( key in overrideObject )
-        {
-            if ( result.hasOwnProperty(key) &&
-                 ( typeof overrideObject[key] === "boolean" ) )
-            {
-                result[key] = overrideObject[key];
-            }
-        }
-        return result;
-    }
-
     function applyConfig(configObject) {
         var permissionObject = {};
         if ( configObject &&
@@ -77,10 +55,11 @@ JQPane {
         var permissionObject = {};
         if ( nextConfig.permissions && ( typeof nextConfig.permissions === "object" ) )
         {
-            permissionObject = mergePermissions(
-                permissionObject,
-                nextConfig.permissions
-            );
+            permissionObject = cloneConfig(nextConfig.permissions);
+            if ( !permissionObject || ( typeof permissionObject !== "object" ) )
+            {
+                permissionObject = {};
+            }
         }
 
         permissionObject["file.read"] = fileRead.checked;
