@@ -34,6 +34,7 @@
 #include "capabilities/process/processexec.h"
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
+#include "capabilities/system/systeminput.h"
 #include "crypto/secretbox/secretboxcrypto.h"
 #include "crypto/signing/deviceauth.h"
 
@@ -1329,6 +1330,37 @@ bool NodeApplication::executeInvokeCommand(
         }
 
         *payload = resultArray;
+        return true;
+    }
+
+    if ( command == QStringLiteral("system.input") )
+    {
+        QJsonObject inputResult;
+        QString inputError;
+        bool invalidParams = false;
+        if ( !SystemInput::execute(
+                params,
+                &inputResult,
+                &inputError,
+                &invalidParams
+            ) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("SYSTEM_INPUT_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = inputError.isEmpty()
+                    ? QStringLiteral("failed to run system input")
+                    : inputError;
+            }
+            return false;
+        }
+
+        *payload = inputResult;
         return true;
     }
 

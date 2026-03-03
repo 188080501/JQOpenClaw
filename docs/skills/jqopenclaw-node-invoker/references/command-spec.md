@@ -505,7 +505,7 @@
 ## 8. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` 参数校验失败）。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `system.input` 参数校验失败）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
@@ -536,7 +536,53 @@
 - `COMMAND_NOT_SUPPORTED`
   - 节点未实现该命令。
   - 检查 `node.describe.commands`。
-
+- `SYSTEM_INPUT_FAILED`
+  - `system.input` 请求投递失败（例如线程池不可用、平台不支持）。
 - `command not allowlisted`
   - 网关策略拦截。
-  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`）。
+  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`system.input`）。
+
+## 9. system.input
+
+用途：控制鼠标与键盘输入，支持一个请求内多动作顺序执行。
+说明：参数校验通过后请求会异步入队，`node.invoke` 立即返回，不等待动作执行完成。
+调度策略：latest-wins。若新请求到达，会取消旧请求尚未完成的剩余动作；已执行动作不会回滚。
+建议：`keyboard.down` / `keyboard.up` 尽量在同一请求内闭合配对，或优先使用 `keyboard.tap`。
+
+参数（`params`）：
+- `actions`：数组，必填，长度 `[1, 1000]`
+- `actions[i].type` 支持：
+  - `mouse.move`：`mode=absolute|relative`，`x`，`y`
+  - `mouse.click`：`button=left|right`，可选 `count`
+  - `keyboard.down` / `keyboard.up` / `keyboard.tap`：`key`
+  - `keyboard.text`：`text`（非空），可选 `intervalMs`
+  - `delay`：`ms`
+
+返回（`payload`）：
+- `operation`：固定 `input`
+- `totalCount`
+- `accepted`：固定 `true`
+- `async`：固定 `true`
+- `ok`：固定 `true`
+
+示例：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "system.input",
+    "params": {
+      "actions": [
+        { "type": "mouse.move", "mode": "absolute", "x": 1200, "y": 700 },
+        { "type": "mouse.click", "button": "left" },
+        { "type": "delay", "ms": 150 },
+        { "type": "keyboard.text", "text": "OpenClaw", "intervalMs": 20 }
+      ]
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```

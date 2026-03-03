@@ -9,7 +9,7 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 - 运行平台：Windows，后期扩展Mac和Linux。
 - 运行形态：单可执行程序（`JQOpenClawNode.exe`）接入 Gateway。
 - 协议兼容：对接 OpenClaw Gateway 的 `node.invoke` 调用链路。
-- 能力范围：文件、进程、系统信息与截图（详见下文“节点能力与命令”）。
+- 能力范围：文件、进程、系统信息、截图与输入控制（详见下文“节点能力与命令”）。
 - 开发基线：`Qt 6.5.3 + MSVC`。
 - 连接能力：通过指定 Gateway IP/端口/token 连接 OpenClaw Gateway WebSocket Node 模式。
 - 注册与识别：支持设备注册、设备身份识别与基础链路建立。
@@ -24,6 +24,7 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 | `process` | `process.exec` | 基于 QProcess 远程执行进程命令，返回 `exitCode/stdout/stderr` 等结果。 |
 | `system` | `system.screenshot` | 采集桌面截图并返回图片信息（JPG）。 |
 | `system` | `system.info` | 采集系统基础信息（CPU 名称+核心/线程、计算机名/主机名、系统名称/版本、用户名、内存、GPU、IP、硬盘容量）。 |
+| `system` | `system.input` | 输入控制能力，支持动作列表混排：`mouse.move`（绝对/相对）、`mouse.click`（左/右键）、`keyboard.down/up/tap`、`keyboard.text`（文本输入）、`delay`（毫秒延迟）；请求会异步入队并立即返回，若有更新请求到达会取消旧请求剩余动作（latest-wins）。 |
 
 ## 调用约定
 
@@ -73,7 +74,7 @@ JQOpenClaw
 ├─ modules/openclawprotocol/     # 网关握手与 caps/commands/permissions 声明
 ├─ modules/capabilities/file/    # file 能力实现（file.read / file.write：写入/移动/删除/目录增删）
 ├─ modules/capabilities/process/ # process 能力实现（process.manage / process.exec）
-├─ modules/capabilities/system/  # system 能力实现（system.screenshot / system.info）
+├─ modules/capabilities/system/  # system 能力实现（system.screenshot / system.info / system.input）
 ├─ modules/crypto/               # 设备身份、签名与加解密相关能力
 └─ docs/                         # 项目依赖与部署文档
 ```
