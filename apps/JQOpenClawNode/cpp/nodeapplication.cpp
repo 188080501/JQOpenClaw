@@ -18,7 +18,6 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QJsonValue>
-#include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
 #include <QNetworkAccessManager>
@@ -31,7 +30,6 @@
 #include <QUuid>
 #include <QUrl>
 #include <QWindow>
-#include <QWidgetAction>
 
 // JQOpenClaw import
 #include "capabilities/file/fileaccessread.h"
@@ -592,7 +590,7 @@ bool NodeApplication::reconnectGatewayFromConfig(QString *error)
     const NodeOptions options = buildNodeOptions(&optionsError);
     if ( !optionsError.isEmpty() )
     {
-        connectionState_ = ConnectionState::Error;
+        setConnectionState(ConnectionState::Error);
         connectionStateDetail_ = optionsError;
         updateConnectionStatusAction();
         if ( error != nullptr )
@@ -608,7 +606,7 @@ bool NodeApplication::reconnectGatewayFromConfig(QString *error)
     registered_ = false;
     reconnectingFromConfigSave_ = true;
     reconnectAfterClose_ = true;
-    connectionState_ = ConnectionState::Connecting;
+    setConnectionState(ConnectionState::Connecting);
     connectionStateDetail_.clear();
     updateConnectionStatusAction();
 
@@ -905,11 +903,6 @@ void NodeApplication::initializeSystemTray()
     }
 
     trayMenu_ = new QMenu();
-    connectionStatusAction_ = new QWidgetAction(trayMenu_);
-    connectionStatusLabel_ = new QLabel(trayMenu_);
-    connectionStatusLabel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-    connectionStatusAction_->setDefaultWidget(connectionStatusLabel_);
-    trayMenu_->addAction(connectionStatusAction_);
     mainWindowAction_ = trayMenu_->addAction(QStringLiteral("操作面板"));
     exitAction_ = trayMenu_->addAction(QStringLiteral("退出程序"));
 
@@ -976,37 +969,6 @@ void NodeApplication::updateConnectionStatusAction()
     {
         connectionStateText_ = statusText;
         emit connectionStateTextChanged(connectionStateText_);
-    }
-
-    if ( connectionStatusLabel_ != nullptr )
-    {
-        QString color = QStringLiteral("#6b7280");
-        switch ( connectionState_ )
-        {
-        case ConnectionState::Disconnected:
-            color = QStringLiteral("#6b7280");
-            break;
-        case ConnectionState::Connecting:
-            color = QStringLiteral("#b45309");
-            break;
-        case ConnectionState::Pairing:
-            color = QStringLiteral("#2563eb");
-            break;
-        case ConnectionState::Connected:
-            color = QStringLiteral("#15803d");
-            break;
-        case ConnectionState::Error:
-            color = QStringLiteral("#b91c1c");
-            break;
-        }
-
-        connectionStatusLabel_->setText(
-            QStringLiteral("  连接状态：%1  ").arg(statusText)
-        );
-        connectionStatusLabel_->setStyleSheet(
-            QStringLiteral("color: %1; font-weight: 600;")
-                .arg(color)
-        );
     }
 
     if ( trayIcon_ != nullptr )
@@ -1110,7 +1072,7 @@ void NodeApplication::start()
     stopPairingReconnect();
     reconnectAfterClose_ = false;
     reconnectingFromConfigSave_ = false;
-    connectionState_ = ConnectionState::Connecting;
+    setConnectionState(ConnectionState::Connecting);
     connectionStateDetail_.clear();
     updateConnectionStatusAction();
 
@@ -1124,7 +1086,7 @@ void NodeApplication::start()
     const NodeOptions options = buildNodeOptions(&optionsError);
     if ( !optionsError.isEmpty() )
     {
-        connectionState_ = ConnectionState::Error;
+        setConnectionState(ConnectionState::Error);
         connectionStateDetail_ = optionsError;
         updateConnectionStatusAction();
         qWarning().noquote() << optionsError;
@@ -1134,7 +1096,7 @@ void NodeApplication::start()
     QString initError;
     if ( !DeviceAuth::initialize(&initError) )
     {
-        connectionState_ = ConnectionState::Error;
+        setConnectionState(ConnectionState::Error);
         connectionStateDetail_ = initError.trimmed();
         updateConnectionStatusAction();
         qCritical().noquote() << initError;
@@ -1146,7 +1108,7 @@ void NodeApplication::start()
     QString identityError;
     if ( !store.loadOrCreate(&identity_, &identityError) )
     {
-        connectionState_ = ConnectionState::Error;
+        setConnectionState(ConnectionState::Error);
         connectionStateDetail_ = identityError.trimmed();
         updateConnectionStatusAction();
         qCritical().noquote() << identityError;
@@ -1157,7 +1119,7 @@ void NodeApplication::start()
     QString selfTestError;
     if ( !runCryptoSelfTest(&selfTestError) )
     {
-        connectionState_ = ConnectionState::Error;
+        setConnectionState(ConnectionState::Error);
         connectionStateDetail_ = selfTestError.trimmed();
         updateConnectionStatusAction();
         qCritical().noquote() << selfTestError;
@@ -1188,7 +1150,7 @@ void NodeApplication::onConnectAccepted(const QJsonObject &payload)
     reconnectAfterClose_ = false;
     reconnectingFromConfigSave_ = false;
     registered_ = true;
-    connectionState_ = ConnectionState::Connected;
+    setConnectionState(ConnectionState::Connected);
     connectionStateDetail_.clear();
     updateConnectionStatusAction();
 
@@ -1208,7 +1170,7 @@ void NodeApplication::onConnectAccepted(const QJsonObject &payload)
 void NodeApplication::onConnectRejected(const QJsonObject &error)
 {
     const QString message = parseErrorMessage(error);
-    connectionState_ = ConnectionState::Pairing;
+    setConnectionState(ConnectionState::Pairing);
     connectionStateDetail_ = message;
     updateConnectionStatusAction();
     qWarning().noquote() << QStringLiteral("gateway connect rejected, waiting for pairing: %1").arg(message);
@@ -1217,13 +1179,13 @@ void NodeApplication::onConnectRejected(const QJsonObject &error)
 
 void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 {
-    setLastInvokeTime(
-        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))
-    );
-
     const QString invokeId = extractString(payload, QStringLiteral("id"));
     const QString nodeId = extractString(payload, QStringLiteral("nodeId"));
     const QString command = extractString(payload, QStringLiteral("command"));
+    setLastInvokeTime(
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))
+    );
+    setLastInvokeCapability(command);
     const QString idempotencyKey = extractString(payload, QStringLiteral("idempotencyKey"));
     const QJsonValue paramsJsonValue = payload.value(QStringLiteral("paramsJSON"));
     const QString paramsJson = paramsJsonValue.isString()
@@ -1553,7 +1515,7 @@ void NodeApplication::onTransportError(const QString &message)
     const bool pairingInProgress = ( connectionState_ == ConnectionState::Pairing );
     if ( !pairingInProgress )
     {
-        connectionState_ = ConnectionState::Error;
+        setConnectionState(ConnectionState::Error);
         connectionStateDetail_ = message.trimmed();
         updateConnectionStatusAction();
     }
@@ -1577,7 +1539,7 @@ void NodeApplication::onTransportError(const QString &message)
             qInfo().noquote() << QStringLiteral("transport error while pairing, keep process alive");
             return;
         }
-        emit finished(1);
+        qWarning().noquote() << QStringLiteral("transport error before registration, keep process alive");
     }
 }
 
@@ -1586,7 +1548,7 @@ void NodeApplication::onGatewayClosed()
     if ( reconnectAfterClose_ )
     {
         reconnectAfterClose_ = false;
-        connectionState_ = ConnectionState::Connecting;
+        setConnectionState(ConnectionState::Connecting);
         connectionStateDetail_.clear();
         updateConnectionStatusAction();
         gatewayClient_.open();
@@ -1602,7 +1564,7 @@ void NodeApplication::onGatewayClosed()
     }
 
     stopPairingReconnect();
-    connectionState_ = ConnectionState::Disconnected;
+    setConnectionState(ConnectionState::Disconnected);
     connectionStateDetail_ = QStringLiteral("网关连接已关闭");
     updateConnectionStatusAction();
 
@@ -1614,11 +1576,11 @@ void NodeApplication::onGatewayClosed()
             return;
         }
 
-        emit finished(1);
+        qWarning().noquote() << QStringLiteral("gateway closed before registration, keep process alive");
         return;
     }
 
-    emit finished(3);
+    qWarning().noquote() << QStringLiteral("gateway closed after registration, keep process alive");
 }
 
 void NodeApplication::onPairingReconnectTimeout()

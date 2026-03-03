@@ -5,11 +5,11 @@ import "./"
 
 Window {
     id: window
-    width: 600
-    height: 680
-    minimumWidth: 600
+    width: 560
+    height: 658
+    minimumWidth: 560
     minimumHeight: 100
-    maximumWidth: 600
+    maximumWidth: 560
     visible: true
     opacity: 0
     title: qsTr("JQOpenClawNode")

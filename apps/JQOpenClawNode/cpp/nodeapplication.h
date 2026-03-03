@@ -19,9 +19,7 @@
 #include "openclawprotocol/nodeoptions.h"
 
 class QAction;
-class QLabel;
 class QMenu;
-class QWidgetAction;
 
 class NodeApplication : public QObject
 {
@@ -30,9 +28,20 @@ class NodeApplication : public QObject
     Q_PROPERTY( ConnectionState connectionState READ connectionState WRITE setConnectionState NOTIFY connectionStateChanged )
     Q_PROPERTY( QString connectionStateText READ connectionStateText NOTIFY connectionStateTextChanged )
     Q_PROPERTY( QString lastInvokeTime READ lastInvokeTime NOTIFY lastInvokeTimeChanged )
+    Q_PROPERTY( QString lastInvokeCapability READ lastInvokeCapability NOTIFY lastInvokeCapabilityChanged )
     Q_PROPERTY( QJsonObject config READ config WRITE setConfig NOTIFY configChanged )
 
 public:
+    enum class ConnectionState
+    {
+        Disconnected,
+        Connecting,
+        Pairing,
+        Connected,
+        Error
+    };
+    Q_ENUM( ConnectionState )
+
     explicit NodeApplication(
         QObject *mainWindowObject = nullptr,
         QObject *parent = nullptr
@@ -46,15 +55,6 @@ signals:
     void finished(int exitCode);
 
 private:
-    enum class ConnectionState
-    {
-        Disconnected,
-        Connecting,
-        Pairing,
-        Connected,
-        Error
-    };
-
     void initializeSystemTray();
     void showMainWindow();
     void updateConnectionStatusAction();
@@ -133,8 +133,6 @@ private:
     QSystemTrayIcon *trayIcon_ = nullptr;
     QMenu *trayMenu_ = nullptr;
     QAction *mainWindowAction_ = nullptr;
-    QWidgetAction *connectionStatusAction_ = nullptr;
-    QLabel *connectionStatusLabel_ = nullptr;
     QAction *exitAction_ = nullptr;
     bool registered_ = false;
     QString connectionStateDetail_;
@@ -158,6 +156,10 @@ private: QString lastInvokeTime_ = QStringLiteral("无");
 public: inline QString lastInvokeTime() const;
 public: inline void setLastInvokeTime(const QString &newValue);
     Q_SIGNAL void lastInvokeTimeChanged(const QString lastInvokeTime);
+private: QString lastInvokeCapability_ = QString();
+public: inline QString lastInvokeCapability() const;
+public: inline void setLastInvokeCapability(const QString &newValue);
+    Q_SIGNAL void lastInvokeCapabilityChanged(const QString lastInvokeCapability);
 
 private: QJsonObject config_;
 public: inline QJsonObject config() const;

@@ -4,6 +4,7 @@
 #include <QLockFile>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <qqml.h>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
@@ -45,9 +46,10 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    NodeApplication nodeApplication;
-
     QQuickStyle::setStyle( "Material" );
+    qmlRegisterType< NodeApplication >( "JQOpenClawNode", 1, 0, "NodeApplication" );
+
+    NodeApplication nodeApplication;
 
     QQmlApplicationEngine engine;
     engine.addImportPath( QStringLiteral( "qrc:/qml" ) );

@@ -16,6 +16,10 @@ inline QString NodeApplication::lastInvokeTime() const
 { return lastInvokeTime_; }
 inline void NodeApplication::setLastInvokeTime(const QString &newValue)
 { if ( newValue == lastInvokeTime_ ) { return; } lastInvokeTime_ = newValue; emit lastInvokeTimeChanged( lastInvokeTime_ ); }
+inline QString NodeApplication::lastInvokeCapability() const
+{ return lastInvokeCapability_; }
+inline void NodeApplication::setLastInvokeCapability(const QString &newValue)
+{ if ( newValue == lastInvokeCapability_ ) { return; } lastInvokeCapability_ = newValue; emit lastInvokeCapabilityChanged( lastInvokeCapability_ ); }
 
 inline QJsonObject NodeApplication::config() const
 { return config_; }
