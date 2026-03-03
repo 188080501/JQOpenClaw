@@ -1673,6 +1673,8 @@ void NodeApplication::onTransportError(const QString &message)
     qCritical().noquote() << message;
     if ( !registered_ )
     {
+        startPairingReconnect();
+
         if ( reconnectingFromConfigSave_ )
         {
             qWarning().noquote() << QStringLiteral("transport error after config save, keep process alive");
@@ -1700,6 +1702,15 @@ void NodeApplication::onGatewayClosed()
         return;
     }
 
+    if ( !registered_ &&
+         pairingReconnectTimer_.isActive() &&
+         ( connectionState_ == ConnectionState::Error ||
+           connectionState_ == ConnectionState::Connecting ) )
+    {
+        qInfo().noquote() << QStringLiteral("gateway closed after transport error, waiting for retry");
+        return;
+    }
+
     if ( connectionState_ == ConnectionState::Pairing )
     {
         connectionStateDetail_ = QStringLiteral("等待配对完成");
@@ -1708,13 +1719,20 @@ void NodeApplication::onGatewayClosed()
         return;
     }
 
-    stopPairingReconnect();
-    setConnectionState(ConnectionState::Disconnected);
-    connectionStateDetail_ = QStringLiteral("网关连接已关闭");
-    updateConnectionStatusAction();
-
     if ( !registered_ )
     {
+        if ( connectionState_ != ConnectionState::Error )
+        {
+            setConnectionState(ConnectionState::Error);
+            if ( connectionStateDetail_.trimmed().isEmpty() )
+            {
+                connectionStateDetail_ = QStringLiteral("网关连接已关闭");
+            }
+            updateConnectionStatusAction();
+        }
+
+        startPairingReconnect();
+
         if ( reconnectingFromConfigSave_ )
         {
             qWarning().noquote() << QStringLiteral("gateway closed after config save, keep process alive");
@@ -1725,15 +1743,30 @@ void NodeApplication::onGatewayClosed()
         return;
     }
 
+    stopPairingReconnect();
+    setConnectionState(ConnectionState::Disconnected);
+    connectionStateDetail_ = QStringLiteral("网关连接已关闭");
+    updateConnectionStatusAction();
+
     qWarning().noquote() << QStringLiteral("gateway closed after registration, keep process alive");
 }
 
 void NodeApplication::onPairingReconnectTimeout()
 {
-    if ( connectionState_ != ConnectionState::Pairing )
+    if ( registered_ ||
+         ( connectionState_ != ConnectionState::Pairing &&
+           connectionState_ != ConnectionState::Error &&
+           connectionState_ != ConnectionState::Connecting ) )
     {
         stopPairingReconnect();
         return;
+    }
+
+    if ( connectionState_ == ConnectionState::Error )
+    {
+        setConnectionState(ConnectionState::Connecting);
+        connectionStateDetail_.clear();
+        updateConnectionStatusAction();
     }
 
     qInfo().noquote() << QStringLiteral(
@@ -1745,7 +1778,10 @@ void NodeApplication::onPairingReconnectTimeout()
         this,
         [this]()
         {
-            if ( connectionState_ == ConnectionState::Pairing )
+            if ( !registered_ &&
+                 ( connectionState_ == ConnectionState::Connecting ||
+                   connectionState_ == ConnectionState::Pairing ||
+                   connectionState_ == ConnectionState::Error ) )
             {
                 gatewayClient_.open();
             }
