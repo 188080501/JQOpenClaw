@@ -3,7 +3,7 @@ TARGET   = JQOpenClawNode
 
 TEMPLATE = app
 
-QT += core gui network websockets widgets
+QT += core gui qml quick network websockets widgets
 CONFIG += console c++17
 CONFIG -= app_bundle
 
@@ -15,8 +15,15 @@ include( $$PWD/../../modules/crypto.pri )
 include( $$PWD/../../modules/jqcontrols.pri )
 
 HEADERS *= \
-    $$PWD/nodeapplication.h
+    $$PWD/cpp/nodeapplication.h \
+    $$PWD/cpp/nodeapplication.inc
 
 SOURCES *= \
-    $$PWD/main.cpp \
-    $$PWD/nodeapplication.cpp
+    $$PWD/cpp/main.cpp \
+    $$PWD/cpp/nodeapplication.cpp
+
+RESOURCES *= \
+    $$PWD/qml/qml.qrc
+
+QML_IMPORT_PATH *= \
+    $$PWD/qml

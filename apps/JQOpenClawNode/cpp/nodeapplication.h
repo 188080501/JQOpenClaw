@@ -1,4 +1,4 @@
-#ifndef JQOPENCLAW_APPS_JQOPENCLAWNODE_NODEAPPLICATION_H_
+﻿#ifndef JQOPENCLAW_APPS_JQOPENCLAWNODE_NODEAPPLICATION_H_
 #define JQOPENCLAW_APPS_JQOPENCLAWNODE_NODEAPPLICATION_H_
 
 // Qt lib import
@@ -7,6 +7,7 @@
 #include <QJsonValue>
 #include <QList>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QSystemTrayIcon>
@@ -27,8 +28,15 @@ class NodeApplication : public QObject
 {
     Q_OBJECT
 
+    Q_PROPERTY( ConnectionState connectionState READ connectionState WRITE setConnectionState NOTIFY connectionStateChanged )
+    Q_PROPERTY( QJsonObject config READ config WRITE setConfig NOTIFY configChanged )
+
 public:
-    explicit NodeApplication(const NodeOptions &options, QObject *parent = nullptr);
+    explicit NodeApplication(
+        const NodeOptions &options,
+        QObject *mainWindowObject = nullptr,
+        QObject *parent = nullptr
+    );
 
     void start();
 
@@ -46,6 +54,7 @@ private:
     };
 
     void initializeSystemTray();
+    void showMainWindow();
     void updateConnectionStatusAction();
     QString connectionStateDisplayText() const;
     void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
@@ -108,6 +117,7 @@ private:
     DeviceIdentity identity_;
     GatewayClient gatewayClient_;
     NodeRegistrar registrar_;
+    QPointer< QObject > mainWindowObject_;
     QSystemTrayIcon *trayIcon_ = nullptr;
     QMenu *trayMenu_ = nullptr;
     QAction *mainWindowAction_ = nullptr;
@@ -115,11 +125,26 @@ private:
     QLabel *connectionStatusLabel_ = nullptr;
     QAction *exitAction_ = nullptr;
     bool registered_ = false;
-    ConnectionState connectionState_ = ConnectionState::Disconnected;
     QString connectionStateDetail_;
     QTimer pairingReconnectTimer_;
     QHash<QString, InvokeIdempotencyEntry> invokeIdempotencyCache_;
     QStringList invokeIdempotencyCacheOrder_;
+
+    // Property statement code start
+private: ConnectionState connectionState_ = ConnectionState::Disconnected;
+public: inline ConnectionState connectionState() const;
+public: inline void setConnectionState(const ConnectionState &newValue);
+    Q_SIGNAL void connectionStateChanged(const ConnectionState connectionState);
+
+private: QJsonObject config_;
+public: inline QJsonObject config() const;
+public: inline void setConfig(const QJsonObject &newValue);
+    Q_SIGNAL void configChanged(const QJsonObject config);
+private:
+    // Property statement code end
 };
+
+// .inc include
+#include "nodeapplication.inc"
 
 #endif // JQOPENCLAW_APPS_JQOPENCLAWNODE_NODEAPPLICATION_H_

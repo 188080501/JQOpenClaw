@@ -15,6 +15,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QLockFile>
+#include <QQmlApplicationEngine>
 #include <QStandardPaths>
 
 // JQOpenClaw import
@@ -384,7 +385,19 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    NodeApplication nodeApplication(options);
+    QQmlApplicationEngine engine;
+    engine.addImportPath( QStringLiteral( "qrc:/qml" ) );
+    engine.load( QUrl( QStringLiteral( "qrc:/qml/main.qml" ) ) );
+    if ( engine.rootObjects().isEmpty() )
+    {
+        qCritical().noquote() << "failed to load qml ui";
+        return 1;
+    }
+
+    NodeApplication nodeApplication(
+        options,
+        engine.rootObjects().first()
+    );
     QObject::connect(
         &nodeApplication,
         &NodeApplication::finished,

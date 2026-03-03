@@ -25,6 +25,7 @@
 #include <QSystemTrayIcon>
 #include <QUuid>
 #include <QUrl>
+#include <QWindow>
 #include <QWidgetAction>
 
 // JQOpenClaw import
@@ -352,11 +353,16 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
 }
 }
 
-NodeApplication::NodeApplication(const NodeOptions &options, QObject *parent) :
+NodeApplication::NodeApplication(
+    const NodeOptions &options,
+    QObject *mainWindowObject,
+    QObject *parent
+) :
     QObject(parent),
     options_(options),
     gatewayClient_(this),
     registrar_(options),
+    mainWindowObject_(mainWindowObject),
     pairingReconnectTimer_(this)
 {
     pairingReconnectTimer_.setInterval(kPairingReconnectIntervalMs);
@@ -460,6 +466,36 @@ void NodeApplication::initializeSystemTray()
     trayIcon_->show();
 }
 
+void NodeApplication::showMainWindow()
+{
+    if ( mainWindowObject_.isNull() )
+    {
+        qWarning().noquote() << QStringLiteral("[tray] main window object is null");
+        return;
+    }
+
+    auto window = qobject_cast< QWindow * >( mainWindowObject_.data() );
+    if ( window == nullptr )
+    {
+        qWarning().noquote() << QStringLiteral("[tray] main window object is not a QWindow");
+        return;
+    }
+
+    if ( !window->isVisible() )
+    {
+        window->show();
+    }
+
+    if ( window->windowState() == Qt::WindowMinimized )
+    {
+        window->setWindowState(Qt::WindowNoState);
+    }
+
+    window->setOpacity(1.0);
+    window->raise();
+    window->requestActivate();
+}
+
 void NodeApplication::updateConnectionStatusAction()
 {
     const QString statusText = connectionStateDisplayText();
@@ -535,13 +571,19 @@ QString NodeApplication::connectionStateDisplayText() const
 
 void NodeApplication::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason)
 {
-    if ( trayMenu_ == nullptr )
+    if ( ( reason == QSystemTrayIcon::Trigger ) ||
+         ( reason == QSystemTrayIcon::DoubleClick ) )
+    {
+        showMainWindow();
+        return;
+    }
+
+    if ( reason != QSystemTrayIcon::Context )
     {
         return;
     }
 
-    if ( ( reason != QSystemTrayIcon::Trigger ) &&
-         ( reason != QSystemTrayIcon::Context ) )
+    if ( trayMenu_ == nullptr )
     {
         return;
     }
@@ -556,7 +598,7 @@ void NodeApplication::onTrayIconActivated(QSystemTrayIcon::ActivationReason reas
 
 void NodeApplication::onMainWindowActionTriggered()
 {
-    qDebug().noquote() << QStringLiteral("[tray] 主界面按钮点击，暂未实现");
+    showMainWindow();
 }
 
 void NodeApplication::onExitActionTriggered()
