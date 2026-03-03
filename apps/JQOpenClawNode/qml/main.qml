@@ -6,7 +6,7 @@ import "./"
 Window {
     id: window
     width: 560
-    height: 658
+    height: 700
     minimumWidth: 560
     minimumHeight: 100
     maximumWidth: 560
@@ -47,6 +47,10 @@ Window {
             }
 
             ConfigPane {
+                width: parent.width
+            }
+
+            SoftwarePane {
                 width: parent.width
             }
         }

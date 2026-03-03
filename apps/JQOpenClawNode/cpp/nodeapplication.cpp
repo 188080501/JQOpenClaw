@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QCoreApplication>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -25,6 +26,7 @@
 #include <QNetworkRequest>
 #include <QRandomGenerator>
 #include <QSaveFile>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
 #include <QUuid>
@@ -49,6 +51,71 @@ constexpr int kPairingReconnectIntervalMs = 15000;
 constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
 constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
 constexpr quint16 kDefaultGatewayPort = 18789;
+
+QString startupCommandLine()
+{
+    const QString appPath = QCoreApplication::applicationFilePath().trimmed();
+    if ( appPath.isEmpty() )
+    {
+        return QString();
+    }
+
+    return QStringLiteral("\"%1\"").arg(QDir::toNativeSeparators(appPath));
+}
+
+bool applyFollowSystemStartupConfig(
+    const QJsonObject &config,
+    QString *error
+)
+{
+#if defined(Q_OS_WIN)
+    const bool enabled = config.value(QStringLiteral("followSystemStartup")).toBool(false);
+    QSettings startupSettings(
+        QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+        QSettings::NativeFormat
+    );
+
+    const QString startupValueName = QStringLiteral("JQOpenClawNode");
+    if ( enabled )
+    {
+        const QString command = startupCommandLine();
+        if ( command.isEmpty() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("failed to resolve app path for startup command");
+            }
+            return false;
+        }
+        startupSettings.setValue(startupValueName, command);
+    }
+    else
+    {
+        startupSettings.remove(startupValueName);
+    }
+
+    startupSettings.sync();
+    if ( startupSettings.status() != QSettings::NoError )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "failed to update startup setting in registry (status=%1)"
+            ).arg(static_cast<int>(startupSettings.status()));
+        }
+        return false;
+    }
+
+    return true;
+#else
+    Q_UNUSED(config);
+    if ( error != nullptr )
+    {
+        error->clear();
+    }
+    return true;
+#endif
+}
 
 QString extractString(const QJsonObject &object, const QString &key)
 {
@@ -415,9 +482,20 @@ NodeApplication::NodeApplication(
 
     setConfig(defaultConfig());
     QString loadConfigError;
-    if ( !loadConfigFromDisk(&loadConfigError) )
+    const bool configLoaded = loadConfigFromDisk(&loadConfigError);
+    if ( !configLoaded )
     {
         qWarning().noquote() << loadConfigError;
+        return;
+    }
+
+    QString followSystemStartupError;
+    if ( !applyFollowSystemStartupConfig(config_, &followSystemStartupError) )
+    {
+        if ( !followSystemStartupError.trimmed().isEmpty() )
+        {
+            qWarning().noquote() << followSystemStartupError;
+        }
     }
 }
 
@@ -450,6 +528,15 @@ bool NodeApplication::saveConfig()
 
     setConfig(normalizedConfig);
 
+    QString followSystemStartupError;
+    if ( !applyFollowSystemStartupConfig(normalizedConfig, &followSystemStartupError) )
+    {
+        if ( !followSystemStartupError.trimmed().isEmpty() )
+        {
+            qWarning().noquote() << followSystemStartupError;
+        }
+    }
+
     QString reconnectError;
     if ( !reconnectGatewayFromConfig(&reconnectError) )
     {
@@ -461,6 +548,74 @@ bool NodeApplication::saveConfig()
 
     qInfo().noquote() << QStringLiteral("node config saved: %1").arg(configPath_);
     return true;
+}
+
+bool NodeApplication::setFollowSystemStartup(bool enabled)
+{
+    QJsonObject normalizedConfig = normalizeConfig(config_);
+    const bool oldValue = normalizedConfig.value(QStringLiteral("followSystemStartup"))
+        .toBool(false);
+    if ( oldValue == enabled )
+    {
+        return true;
+    }
+
+    normalizedConfig.insert(QStringLiteral("followSystemStartup"), enabled);
+
+    QString saveError;
+    if ( !saveConfigToDisk(normalizedConfig, &saveError) )
+    {
+        qCritical().noquote() << saveError;
+        return false;
+    }
+
+    setConfig(normalizedConfig);
+
+    QString followSystemStartupError;
+    if ( !applyFollowSystemStartupConfig(normalizedConfig, &followSystemStartupError) )
+    {
+        if ( !followSystemStartupError.trimmed().isEmpty() )
+        {
+            qWarning().noquote() << followSystemStartupError;
+        }
+        return false;
+    }
+
+    qInfo().noquote() << QStringLiteral("followSystemStartup updated: %1")
+        .arg(enabled ? QStringLiteral("true") : QStringLiteral("false"));
+    return true;
+}
+
+bool NodeApplication::setSilentStartup(bool enabled)
+{
+    QJsonObject normalizedConfig = normalizeConfig(config_);
+    const bool oldValue = normalizedConfig.value(QStringLiteral("silentStartup"))
+        .toBool(false);
+    if ( oldValue == enabled )
+    {
+        return true;
+    }
+
+    normalizedConfig.insert(QStringLiteral("silentStartup"), enabled);
+
+    QString saveError;
+    if ( !saveConfigToDisk(normalizedConfig, &saveError) )
+    {
+        qCritical().noquote() << saveError;
+        return false;
+    }
+
+    setConfig(normalizedConfig);
+
+    qInfo().noquote() << QStringLiteral("silentStartup updated: %1")
+        .arg(enabled ? QStringLiteral("true") : QStringLiteral("false"));
+    return true;
+}
+
+bool NodeApplication::silentStartupEnabled() const
+{
+    const QJsonObject normalizedConfig = normalizeConfig(config_);
+    return normalizedConfig.value(QStringLiteral("silentStartup")).toBool(false);
 }
 
 QString NodeApplication::generateDefaultDisplayName()
@@ -476,6 +631,8 @@ QJsonObject NodeApplication::defaultConfig()
     config.insert(QStringLiteral("port"), static_cast<int>(kDefaultGatewayPort));
     config.insert(QStringLiteral("token"), QString());
     config.insert(QStringLiteral("tls"), false);
+    config.insert(QStringLiteral("followSystemStartup"), false);
+    config.insert(QStringLiteral("silentStartup"), false);
     config.insert(QStringLiteral("displayName"), QString());
     config.insert(QStringLiteral("nodeId"), QString());
     config.insert(QStringLiteral("identityPath"), defaultIdentityPath());
@@ -519,6 +676,24 @@ QJsonObject NodeApplication::normalizeConfig(const QJsonObject &config)
     if ( tls.isBool() )
     {
         normalized.insert(QStringLiteral("tls"), tls.toBool(false));
+    }
+
+    const QJsonValue followSystemStartup = config.value(QStringLiteral("followSystemStartup"));
+    if ( followSystemStartup.isBool() )
+    {
+        normalized.insert(
+            QStringLiteral("followSystemStartup"),
+            followSystemStartup.toBool(false)
+        );
+    }
+
+    const QJsonValue silentStartup = config.value(QStringLiteral("silentStartup"));
+    if ( silentStartup.isBool() )
+    {
+        normalized.insert(
+            QStringLiteral("silentStartup"),
+            silentStartup.toBool(false)
+        );
     }
 
     const QJsonValue displayName = config.value(QStringLiteral("displayName"));

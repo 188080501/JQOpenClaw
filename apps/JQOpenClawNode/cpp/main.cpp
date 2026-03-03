@@ -8,6 +8,7 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
+#include <QWindow>
 #include <QQuickStyle>
 
 // JQOpenClaw import
@@ -64,7 +65,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    nodeApplication.setMainWindowObject(engine.rootObjects().first());
+    QObject *mainWindowObject = engine.rootObjects().first();
+    nodeApplication.setMainWindowObject(mainWindowObject);
+    if ( nodeApplication.silentStartupEnabled() )
+    {
+        auto window = qobject_cast< QWindow * >( mainWindowObject );
+        if ( window != nullptr )
+        {
+            window->hide();
+        }
+    }
     QObject::connect(
         &nodeApplication,
         &NodeApplication::finished,

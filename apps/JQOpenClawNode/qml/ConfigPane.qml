@@ -45,6 +45,22 @@ JQPane {
         return rawValue;
     }
 
+    function cloneConfig(configObject) {
+        if ( !configObject )
+        {
+            return {};
+        }
+
+        try
+        {
+            return JSON.parse(JSON.stringify(configObject));
+        }
+        catch ( e )
+        {
+            return {};
+        }
+    }
+
     function applyConfig(configObject) {
         gatewayHost.text = readString( configObject, "host", "127.0.0.1" );
         gatewayPort.value = readInt( configObject, "port", 18789 );
@@ -59,18 +75,18 @@ JQPane {
     }
 
     function buildConfig() {
-        return {
-            host: gatewayHost.text.trim(),
-            port: gatewayPort.value,
-            token: gatewayToken.text,
-            tls: tlsEnabled.checked,
-            displayName: displayName.text.trim(),
-            nodeId: nodeId.text.trim(),
-            identityPath: identityPath.text.trim(),
-            fileServerUri: fileServerUri.text.trim(),
-            fileServerToken: fileServerToken.text,
-            modelIdentifier: modelIdentifier.text.trim()
-        };
+        var nextConfig = cloneConfig( nodeApplication ? nodeApplication.config : null );
+        nextConfig.host = gatewayHost.text.trim();
+        nextConfig.port = gatewayPort.value;
+        nextConfig.token = gatewayToken.text;
+        nextConfig.tls = tlsEnabled.checked;
+        nextConfig.displayName = displayName.text.trim();
+        nextConfig.nodeId = nodeId.text.trim();
+        nextConfig.identityPath = identityPath.text.trim();
+        nextConfig.fileServerUri = fileServerUri.text.trim();
+        nextConfig.fileServerToken = fileServerToken.text;
+        nextConfig.modelIdentifier = modelIdentifier.text.trim();
+        return nextConfig;
     }
 
     Component.onCompleted: {

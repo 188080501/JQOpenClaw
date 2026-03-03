@@ -2,6 +2,7 @@
     <qresource prefix="/qml">
         <file>ConfigPane.qml</file>
         <file>InfoPane.qml</file>
+        <file>SoftwarePane.qml</file>
         <file>main.qml</file>
     </qresource>
 </RCC>

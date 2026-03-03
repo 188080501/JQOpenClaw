@@ -48,6 +48,9 @@ public:
     );
 
     Q_INVOKABLE bool saveConfig();
+    Q_INVOKABLE bool setFollowSystemStartup(bool enabled);
+    Q_INVOKABLE bool setSilentStartup(bool enabled);
+    bool silentStartupEnabled() const;
     void setMainWindowObject(QObject *mainWindowObject);
     void start();
 
