@@ -50,12 +50,6 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 | `--file-server-token <token>` | 文件服务器鉴权 token（`X-Token`） | 否（截图上传时必需） |
 | `--config <path>` | 配置文件路径 | 否 |
 
-## 技术选型
-
-- 框架：Qt 6.5.3（Core / QML / Network / WebSockets）
-- 编译器：MSVC
-- 构建系统：qmake（`.pro` / `.pri`）
-
 ## Node 整体运行流程
 
 1. 解析启动参数（host/port/token/tls 等）。
@@ -65,6 +59,12 @@ JQOpenClaw 是一个基于 Qt/C++ 的 OpenClaw Windows 原生 Node，实现与 O
 5. 使用 challenge nonce 生成签名并发送 `connect`。
 6. 连接成功后上报能力清单。
 7. 进入主循环，处理 Gateway 下发调用并返回结果。
+
+## 配对成功后在 OpenClaw 中的显示位置
+
+Node 配对成功后，会在 OpenClaw 中显示在如下位置，便于快速确认节点是否已成功接入：
+
+![Node 配对成功后在 OpenClaw 中的显示位置](docs/images/OpenClaw节点位置.jpg)
 
 ## 目录结构
 
