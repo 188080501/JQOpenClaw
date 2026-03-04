@@ -75,16 +75,6 @@ int main(int argc, char *argv[])
             window->hide();
         }
     }
-    QObject::connect(
-        &nodeApplication,
-        &NodeApplication::finished,
-        &app,
-        [&app](int exitCode)
-        {
-            app.exit(exitCode);
-        }
-    );
-
     QTimer::singleShot(0, &nodeApplication, &NodeApplication::start);
     return app.exec();
 }

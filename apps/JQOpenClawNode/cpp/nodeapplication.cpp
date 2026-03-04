@@ -764,6 +764,35 @@ bool NodeApplication::reconnectGatewayFromConfig(QString *error)
         return false;
     }
 
+    QString authInitError;
+    if ( !DeviceAuth::initialize(&authInitError) )
+    {
+        setConnectionState(ConnectionState::Error);
+        connectionStateDetail_ = authInitError.trimmed();
+        updateConnectionStatusAction();
+        qCritical().noquote() << authInitError;
+        if ( error != nullptr )
+        {
+            *error = authInitError;
+        }
+        return false;
+    }
+
+    DeviceIdentityStore store(options.identityPath);
+    QString identityError;
+    if ( !store.loadOrCreate(&identity_, &identityError) )
+    {
+        setConnectionState(ConnectionState::Error);
+        connectionStateDetail_ = identityError.trimmed();
+        updateConnectionStatusAction();
+        qCritical().noquote() << identityError;
+        if ( error != nullptr )
+        {
+            *error = identityError;
+        }
+        return false;
+    }
+
     gatewayClient_.setOptions(options);
 
     stopPairingReconnect();
@@ -1223,7 +1252,7 @@ void NodeApplication::onExitActionTriggered()
         return;
     }
 
-    emit finished(0);
+    QCoreApplication::exit(0);
 }
 
 void NodeApplication::start()
@@ -1260,7 +1289,6 @@ void NodeApplication::start()
         connectionStateDetail_ = initError.trimmed();
         updateConnectionStatusAction();
         qCritical().noquote() << initError;
-        emit finished(1);
         return;
     }
 
@@ -1272,7 +1300,6 @@ void NodeApplication::start()
         connectionStateDetail_ = identityError.trimmed();
         updateConnectionStatusAction();
         qCritical().noquote() << identityError;
-        emit finished(1);
         return;
     }
 
@@ -1283,7 +1310,6 @@ void NodeApplication::start()
         connectionStateDetail_ = selfTestError.trimmed();
         updateConnectionStatusAction();
         qCritical().noquote() << selfTestError;
-        emit finished(1);
         return;
     }
 
@@ -1691,16 +1717,16 @@ void NodeApplication::onTransportError(const QString &message)
     {
         if ( reconnectingFromConfigSave_ )
         {
-            qWarning().noquote() << QStringLiteral("transport error after config save, keep process alive");
+            qWarning().noquote() << QStringLiteral("transport error after config save");
             return;
         }
 
         if ( pairingInProgress )
         {
-            qInfo().noquote() << QStringLiteral("transport error while pairing, keep process alive");
+            qInfo().noquote() << QStringLiteral("transport error while pairing");
             return;
         }
-        qWarning().noquote() << QStringLiteral("transport error before registration, keep process alive");
+        qWarning().noquote() << QStringLiteral("transport error before registration");
         return;
     }
 
@@ -1732,7 +1758,7 @@ void NodeApplication::onGatewayClosed()
     {
         connectionStateDetail_ = QStringLiteral("等待配对完成");
         updateConnectionStatusAction();
-        qInfo().noquote() << QStringLiteral("gateway closed while pairing, keep process alive");
+        qInfo().noquote() << QStringLiteral("gateway closed while pairing");
         return;
     }
 
@@ -1752,11 +1778,11 @@ void NodeApplication::onGatewayClosed()
 
         if ( reconnectingFromConfigSave_ )
         {
-            qWarning().noquote() << QStringLiteral("gateway closed after config save, keep process alive");
+            qWarning().noquote() << QStringLiteral("gateway closed after config save");
             return;
         }
 
-        qWarning().noquote() << QStringLiteral("gateway closed before registration, keep process alive");
+        qWarning().noquote() << QStringLiteral("gateway closed before registration");
         return;
     }
 
@@ -2394,8 +2420,14 @@ void NodeApplication::sendConnectRequest(const QString &nonce)
     const NodeOptions options = buildNodeOptions(&optionsError);
     if ( !optionsError.isEmpty() )
     {
+        setConnectionState(ConnectionState::Error);
+        connectionStateDetail_ = optionsError.trimmed();
+        updateConnectionStatusAction();
         qCritical().noquote() << optionsError;
-        emit finished(1);
+        startPairingReconnect();
+        qWarning().noquote() << QStringLiteral(
+            "connect request aborted by invalid options"
+        );
         return;
     }
 
@@ -2404,8 +2436,14 @@ void NodeApplication::sendConnectRequest(const QString &nonce)
     QString error;
     if ( !registrar.buildConnectParams(identity_, nonce, &params, &error) )
     {
+        setConnectionState(ConnectionState::Error);
+        connectionStateDetail_ = error.trimmed();
+        updateConnectionStatusAction();
         qCritical().noquote() << error;
-        emit finished(1);
+        startPairingReconnect();
+        qWarning().noquote() << QStringLiteral(
+            "connect request aborted by invalid connect params"
+        );
         return;
     }
 

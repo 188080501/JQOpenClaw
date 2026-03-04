@@ -54,9 +54,6 @@ public:
     void setMainWindowObject(QObject *mainWindowObject);
     void start();
 
-signals:
-    void finished(int exitCode);
-
 private:
     void initializeSystemTray();
     void showMainWindow();
