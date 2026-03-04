@@ -1683,10 +1683,9 @@ void NodeApplication::onTransportError(const QString &message)
     }
 
     qCritical().noquote() << message;
+    startPairingReconnect();
     if ( !registered_ )
     {
-        startPairingReconnect();
-
         if ( reconnectingFromConfigSave_ )
         {
             qWarning().noquote() << QStringLiteral("transport error after config save, keep process alive");
@@ -1699,7 +1698,10 @@ void NodeApplication::onTransportError(const QString &message)
             return;
         }
         qWarning().noquote() << QStringLiteral("transport error before registration, keep process alive");
+        return;
     }
+
+    qWarning().noquote() << QStringLiteral("transport error after registration, waiting for reconnect");
 }
 
 void NodeApplication::onGatewayClosed()
@@ -1755,26 +1757,27 @@ void NodeApplication::onGatewayClosed()
         return;
     }
 
-    stopPairingReconnect();
     setConnectionState(ConnectionState::Disconnected);
     connectionStateDetail_ = QStringLiteral("网关连接已关闭");
     updateConnectionStatusAction();
 
-    qWarning().noquote() << QStringLiteral("gateway closed after registration, keep process alive");
+    startPairingReconnect();
+    qWarning().noquote() << QStringLiteral("gateway closed after registration, waiting for reconnect");
 }
 
 void NodeApplication::onPairingReconnectTimeout()
 {
-    if ( registered_ ||
-         ( connectionState_ != ConnectionState::Pairing &&
-           connectionState_ != ConnectionState::Error &&
-           connectionState_ != ConnectionState::Connecting ) )
+    if ( connectionState_ != ConnectionState::Pairing &&
+         connectionState_ != ConnectionState::Disconnected &&
+         connectionState_ != ConnectionState::Error &&
+         connectionState_ != ConnectionState::Connecting )
     {
         stopPairingReconnect();
         return;
     }
 
-    if ( connectionState_ == ConnectionState::Error )
+    if ( connectionState_ == ConnectionState::Error ||
+         connectionState_ == ConnectionState::Disconnected )
     {
         setConnectionState(ConnectionState::Connecting);
         connectionStateDetail_.clear();
@@ -1790,10 +1793,10 @@ void NodeApplication::onPairingReconnectTimeout()
         this,
         [this]()
         {
-            if ( !registered_ &&
-                 ( connectionState_ == ConnectionState::Connecting ||
-                   connectionState_ == ConnectionState::Pairing ||
-                   connectionState_ == ConnectionState::Error ) )
+            if ( connectionState_ == ConnectionState::Connecting ||
+                 connectionState_ == ConnectionState::Disconnected ||
+                 connectionState_ == ConnectionState::Pairing ||
+                 connectionState_ == ConnectionState::Error )
             {
                 gatewayClient_.open();
             }
