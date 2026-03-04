@@ -41,6 +41,7 @@
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
 #include "capabilities/system/systemnotify.h"
+#include "capabilities/system/systemclipboard.h"
 #include "capabilities/system/systeminput.h"
 #include "crypto/secretbox/secretboxcrypto.h"
 #include "crypto/signing/deviceauth.h"
@@ -2138,6 +2139,37 @@ bool NodeApplication::executeInvokeCommand(
         }
 
         *payload = notifyResult;
+        return true;
+    }
+
+    if ( command == QStringLiteral("system.clipboard") )
+    {
+        QJsonObject clipboardResult;
+        QString clipboardError;
+        bool invalidParams = false;
+        if ( !SystemClipboard::execute(
+                params,
+                &clipboardResult,
+                &clipboardError,
+                &invalidParams
+            ) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("SYSTEM_CLIPBOARD_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = clipboardError.isEmpty()
+                    ? QStringLiteral("failed to run system clipboard")
+                    : clipboardError;
+            }
+            return false;
+        }
+
+        *payload = clipboardResult;
         return true;
     }
 

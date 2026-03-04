@@ -23,6 +23,7 @@ const CapabilityDeclaration capabilityDeclarations[] =
     {"system", "system.screenshot", true},
     {"system", "system.info", true},
     {"system", "system.notify", true},
+    {"system", "system.clipboard", true},
     {"system", "system.input", true},
 };
 

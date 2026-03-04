@@ -48,6 +48,7 @@ JQPane {
         systemScreenshot.checked = readBool(permissionObject, "system.screenshot");
         systemInfo.checked = readBool(permissionObject, "system.info");
         systemNotify.checked = readBool(permissionObject, "system.notify");
+        systemClipboard.checked = readBool(permissionObject, "system.clipboard");
         systemInput.checked = readBool(permissionObject, "system.input");
         applyingConfig = false;
     }
@@ -72,6 +73,7 @@ JQPane {
         permissionObject["system.screenshot"] = systemScreenshot.checked;
         permissionObject["system.info"] = systemInfo.checked;
         permissionObject["system.notify"] = systemNotify.checked;
+        permissionObject["system.clipboard"] = systemClipboard.checked;
         permissionObject["system.input"] = systemInput.checked;
 
         nextConfig.permissions = permissionObject;
@@ -158,6 +160,13 @@ JQPane {
             titleText: qsTr("system.notify")
             titleWidth: 170
             tipText: qsTr("系统弹窗能力：弹出消息提示框（支持 message，title 可选）。")
+        }
+
+        JQSettingsCheckBox {
+            id: systemClipboard
+            titleText: qsTr("system.clipboard")
+            titleWidth: 170
+            tipText: qsTr("系统剪贴板能力：读取当前剪贴板文本，或写入文本到剪贴板。")
         }
 
         JQSettingsCheckBox {
