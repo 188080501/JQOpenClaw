@@ -28,6 +28,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
+#include <QTimer>
 #include <QUuid>
 #include <QUrl>
 #include <QWindow>
@@ -53,6 +54,7 @@ namespace
 constexpr int kPairingReconnectIntervalMs = 15000;
 constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
 constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
+constexpr int kScreenshotUploadTimeoutMs = 30000;
 constexpr auto kDefaultGatewayUrl = "ws://127.0.0.1:18789";
 
 QString startupCommandLine()
@@ -317,8 +319,38 @@ bool uploadScreenshotFile(
     QNetworkReply *reply = networkAccessManager.put(request, imageBytes);
 
     QEventLoop eventLoop;
+    bool requestTimedOut = false;
+    QTimer timeoutTimer;
+    timeoutTimer.setSingleShot(true);
+    QObject::connect(
+        &timeoutTimer,
+        &QTimer::timeout,
+        &eventLoop,
+        [ &eventLoop, reply, &requestTimedOut ]()
+        {
+            requestTimedOut = true;
+            if ( reply != nullptr )
+            {
+                reply->abort();
+            }
+            eventLoop.quit();
+        }
+    );
     QObject::connect(reply, &QNetworkReply::finished, &eventLoop, &QEventLoop::quit);
+    timeoutTimer.start(kScreenshotUploadTimeoutMs);
     eventLoop.exec();
+    timeoutTimer.stop();
+
+    if ( requestTimedOut )
+    {
+        reply->deleteLater();
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file upload timed out after %1ms")
+                .arg(QString::number(kScreenshotUploadTimeoutMs));
+        }
+        return false;
+    }
 
     const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QByteArray responseBody = reply->readAll();
