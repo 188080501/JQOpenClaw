@@ -5,13 +5,15 @@ import JQOpenClawNode
 JQPane {
     id: infoPane
     height: contentColumn.height + 40
+    readonly property string openClawRepoUrl: "https://github.com/openclaw/openclaw"
+    readonly property string jqOpenClawRepoUrl: "https://github.com/188080501/JQOpenClaw"
 
     Column {
         id: contentColumn
         x: 12
         y: 12
         width: parent.width - 24
-        spacing: 8
+        spacing: 12
 
         Text {
             font.pixelSize: 18
@@ -41,5 +43,49 @@ JQPane {
             font.pixelSize: 14
             color: "#1f2937"
         }
+
+        Row {
+            spacing: 16
+
+            Text {
+                id: openClawRepoText
+                text: qsTr("访问OpenClaw")
+                font.pixelSize: 14
+                color: "#2563eb"
+                font.underline: openClawRepoMouseArea.containsMouse
+
+                MouseArea {
+                    id: openClawRepoMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Qt.openUrlExternally(infoPane.openClawRepoUrl)
+                }
+            }
+
+            Text {
+                id: jqOpenClawRepoText
+                text: qsTr("访问JQOpenClaw")
+                font.pixelSize: 14
+                color: "#2563eb"
+                font.underline: jqOpenClawRepoMouseArea.containsMouse
+
+                MouseArea {
+                    id: jqOpenClawRepoMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Qt.openUrlExternally(infoPane.jqOpenClawRepoUrl)
+                }
+            }
+        }
+    }
+
+    Text {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        text: qsTr("当前版本: %1").arg(Qt.application.version)
+        font.pixelSize: 14
+        color: "#9ca3af"
     }
 }
