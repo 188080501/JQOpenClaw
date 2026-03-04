@@ -33,6 +33,26 @@ const qint64 maxRgMaxMatches = 5000;
 const int readRgStartTimeoutMs = 5000;
 const int readRgTimeoutMs = 60000;
 const int readRgKillWaitTimeoutMs = 3000;
+
+Qt::CaseSensitivity pathCaseSensitivity()
+{
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    // Keep path comparisons aligned with default Windows/macOS filesystems.
+    return Qt::CaseInsensitive;
+#else
+    return Qt::CaseSensitive;
+#endif
+}
+
+QDir::SortFlags entryNameSortFlags()
+{
+    QDir::SortFlags sortFlags = QDir::DirsFirst | QDir::Name;
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    sortFlags |= QDir::IgnoreCase;
+#endif
+    return sortFlags;
+}
+
 const char *readRgPowerShellFallbackScript = R"PS(
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
@@ -1297,7 +1317,7 @@ bool FileReadAccess::read(
                     return QString::compare(
                         a.absoluteFilePath(),
                         b.absoluteFilePath(),
-                        Qt::CaseInsensitive
+                        pathCaseSensitivity()
                     ) < 0;
                 }
             );
@@ -1306,7 +1326,7 @@ bool FileReadAccess::read(
         {
             entryInfos = rootDir.entryInfoList(
                 entryFilters,
-                QDir::DirsFirst | QDir::Name | QDir::IgnoreCase
+                entryNameSortFlags()
             );
         }
 

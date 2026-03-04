@@ -20,6 +20,16 @@ enum class ContentEncoding
 
 const qint64 maxWriteBytes = 64 * 1024 * 1024;
 
+Qt::CaseSensitivity pathCaseSensitivity()
+{
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    // Keep path comparisons aligned with default Windows/macOS filesystems.
+    return Qt::CaseInsensitive;
+#else
+    return Qt::CaseSensitive;
+#endif
+}
+
 enum class FileWriteOperation
 {
     Write,
@@ -273,6 +283,35 @@ QString encodingName(ContentEncoding encoding)
     return QStringLiteral("utf8");
 }
 
+QString normalizeAbsolutePathForCompare(const QString &absolutePath)
+{
+    QString normalized = QDir::cleanPath(QDir::fromNativeSeparators(absolutePath));
+    while ( ( normalized.size() > 1 ) && normalized.endsWith(QLatin1Char('/')) )
+    {
+        normalized.chop(1);
+    }
+    return normalized;
+}
+
+bool isSameOrChildPath(const QString &candidatePath, const QString &parentPath)
+{
+    const QString normalizedCandidate = normalizeAbsolutePathForCompare(candidatePath);
+    const QString normalizedParent = normalizeAbsolutePathForCompare(parentPath);
+    const Qt::CaseSensitivity caseSensitivity = pathCaseSensitivity();
+
+    if ( normalizedCandidate.compare(normalizedParent, caseSensitivity) == 0 )
+    {
+        return true;
+    }
+
+    QString normalizedPrefix = normalizedParent;
+    if ( !normalizedPrefix.endsWith(QLatin1Char('/')) )
+    {
+        normalizedPrefix.append(QLatin1Char('/'));
+    }
+    return normalizedCandidate.startsWith(normalizedPrefix, caseSensitivity);
+}
+
 bool removePath(
     const QString &absolutePath,
     bool recursive,
@@ -470,7 +509,7 @@ bool FileWriteAccess::write(
         const QFileInfo destinationInfo(destinationPath);
         const QString sourceAbsolutePath = sourceInfo.absoluteFilePath();
         const QString destinationAbsolutePath = destinationInfo.absoluteFilePath();
-        if ( sourceAbsolutePath.compare(destinationAbsolutePath, Qt::CaseInsensitive) == 0 )
+        if ( sourceAbsolutePath.compare(destinationAbsolutePath, pathCaseSensitivity()) == 0 )
         {
             if ( invalidParams != nullptr )
             {
@@ -479,6 +518,21 @@ bool FileWriteAccess::write(
             if ( error != nullptr )
             {
                 *error = QStringLiteral("file.write move source and destination must be different");
+            }
+            return false;
+        }
+
+        const bool sourceIsDirectory = sourceInfo.isDir() && !sourceInfo.isSymLink();
+        if ( sourceIsDirectory &&
+             isSameOrChildPath(destinationAbsolutePath, sourceAbsolutePath) )
+        {
+            if ( invalidParams != nullptr )
+            {
+                *invalidParams = true;
+            }
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.write move destination must not be inside source directory");
             }
             return false;
         }
@@ -539,6 +593,19 @@ bool FileWriteAccess::write(
         const bool destinationExisted = destinationInfo.exists();
         if ( destinationExisted )
         {
+            if ( isSameOrChildPath(sourceAbsolutePath, destinationAbsolutePath) )
+            {
+                if ( invalidParams != nullptr )
+                {
+                    *invalidParams = true;
+                }
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("file.write move destination must not contain source path");
+                }
+                return false;
+            }
+
             if ( !overwrite )
             {
                 if ( error != nullptr )
@@ -569,7 +636,6 @@ bool FileWriteAccess::write(
         );
 
         bool moved = false;
-        const bool sourceIsDirectory = sourceInfo.isDir() && !sourceInfo.isSymLink();
         if ( sourceIsDirectory )
         {
             QDir rootDir;
