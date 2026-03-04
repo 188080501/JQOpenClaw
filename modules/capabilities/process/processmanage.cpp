@@ -234,9 +234,12 @@ bool parseManageRequest(
     *request = ProcessManageRequest();
     const QJsonObject paramsObject = params.toObject();
     const QJsonValue operationValue = paramsObject.value(QStringLiteral("operation"));
-    if ( !operationValue.isUndefined() &&
-         !operationValue.isNull() &&
-         !operationValue.isString() )
+    if ( operationValue.isUndefined() )
+    {
+        request->operation = ProcessManageOperation::List;
+        request->operationName = QStringLiteral("list");
+    }
+    else if ( operationValue.isNull() || !operationValue.isString() )
     {
         if ( error != nullptr )
         {
@@ -244,30 +247,40 @@ bool parseManageRequest(
         }
         return false;
     }
-
-    const QString operation = extractString(paramsObject, QStringLiteral("operation")).toLower();
-    if ( operation.isEmpty() || ( operation == QStringLiteral("list") ) )
-    {
-        request->operation = ProcessManageOperation::List;
-        request->operationName = QStringLiteral("list");
-    }
-    else if ( operation == QStringLiteral("search") )
-    {
-        request->operation = ProcessManageOperation::Search;
-        request->operationName = QStringLiteral("search");
-    }
-    else if ( operation == QStringLiteral("kill") )
-    {
-        request->operation = ProcessManageOperation::Kill;
-        request->operationName = QStringLiteral("kill");
-    }
     else
     {
-        if ( error != nullptr )
+        const QString operation = operationValue.toString().trimmed().toLower();
+        if ( operation.isEmpty() )
         {
-            *error = QStringLiteral("process.manage operation must be one of: list, search, kill");
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("process.manage operation must not be empty");
+            }
+            return false;
         }
-        return false;
+        if ( operation == QStringLiteral("list") )
+        {
+            request->operation = ProcessManageOperation::List;
+            request->operationName = QStringLiteral("list");
+        }
+        else if ( operation == QStringLiteral("search") )
+        {
+            request->operation = ProcessManageOperation::Search;
+            request->operationName = QStringLiteral("search");
+        }
+        else if ( operation == QStringLiteral("kill") )
+        {
+            request->operation = ProcessManageOperation::Kill;
+            request->operationName = QStringLiteral("kill");
+        }
+        else
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("process.manage operation must be one of: list, search, kill");
+            }
+            return false;
+        }
     }
 
     if ( request->operation == ProcessManageOperation::Kill )

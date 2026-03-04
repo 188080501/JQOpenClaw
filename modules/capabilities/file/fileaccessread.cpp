@@ -321,11 +321,11 @@ bool parseReadOperation(
 
     *operation = FileReadOperation::Read;
     const QJsonValue value = paramsObject.value(QStringLiteral("operation"));
-    if ( value.isUndefined() || value.isNull() )
+    if ( value.isUndefined() )
     {
         return true;
     }
-    if ( !value.isString() )
+    if ( value.isNull() || !value.isString() )
     {
         if ( error != nullptr )
         {
@@ -335,7 +335,15 @@ bool parseReadOperation(
     }
 
     const QString normalized = normalizeToken(value.toString());
-    if ( normalized.isEmpty() || ( normalized == QStringLiteral("read") ) )
+    if ( normalized.isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("operation must not be empty");
+        }
+        return false;
+    }
+    if ( normalized == QStringLiteral("read") )
     {
         *operation = FileReadOperation::Read;
         return true;
