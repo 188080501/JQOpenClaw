@@ -445,7 +445,7 @@
   - `keyword`：字符串，可选。`query` 的兼容别名（仅在 `query` 为空时生效）。
   - `pid`：数字，可选，范围 `[1, 2147483647]`。作为 PID 精确过滤条件。
   - `caseSensitive`：布尔，可选，默认 `false`。
-  - `limit`：数字，可选，默认 `200`，范围 `[1, 5000]`。
+  - `limit`：数字，可选，默认 `300`，范围 `[1, 5000]`。
   - `includePath`：布尔，可选，默认 `false`。是否返回进程路径，并允许 `query` 匹配路径。
   - `includeArchitecture`：布尔，可选，默认 `false`。是否返回 `isWow64` 字段（Windows）。
 - `search` 额外约束：

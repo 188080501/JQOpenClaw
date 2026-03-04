@@ -17,7 +17,7 @@
 
 namespace
 {
-const int processListDefaultLimit = 200;
+const int processListDefaultLimit = 300;
 const int processListMinLimit = 1;
 const int processListMaxLimit = 5000;
 const int processKillDefaultWaitMs = 3000;
