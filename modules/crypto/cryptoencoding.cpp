@@ -126,12 +126,3 @@ QString CryptoEncoding::normalizeMetadataForAuth(const QString &value)
     }
     return toLowerAscii(trimmed);
 }
-
-QString CryptoEncoding::normalizeFingerprint(const QString &value)
-{
-    QString fingerprint = toLowerAscii(value.trimmed());
-    fingerprint.remove(':');
-    fingerprint.remove('-');
-    fingerprint.remove(' ');
-    return fingerprint;
-}

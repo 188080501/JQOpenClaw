@@ -1021,7 +1021,6 @@ NodeOptions NodeApplication::buildNodeOptions(QString *error) const
     options.gatewayUrl = normalizedConfig.value(QStringLiteral("gatewayUrl")).toString().trimmed();
     options.token = normalizedConfig.value(QStringLiteral("token")).toString();
     options.tls = false;
-    options.tlsFingerprint.clear();
     options.displayName = normalizedConfig.value(QStringLiteral("displayName")).toString().trimmed();
     options.nodeId = normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed();
     options.configPath = configPath_;

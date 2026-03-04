@@ -10,7 +10,6 @@ struct NodeOptions
     QString gatewayUrl;
     QString token;
     bool tls = false;
-    QString tlsFingerprint;
     QString displayName;
     QString nodeId;
     QString configPath;

@@ -2,20 +2,13 @@
 #include "openclawprotocol/gatewayclient.h"
 
 // Qt lib import
-#include <QCryptographicHash>
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QSslCertificate>
-#include <QSslConfiguration>
 #include <QStringList>
 #include <QUuid>
 #include <QUrl>
-#include <QWebSocketProtocol>
-
-// JQOpenClaw import
-#include "crypto/cryptoencoding.h"
 
 namespace
 {
@@ -126,37 +119,6 @@ void GatewayClient::sendInvokeResult(const QJsonObject &params)
 
 void GatewayClient::onConnected()
 {
-    if ( options_.tls &&
-         !options_.tlsFingerprint.trimmed().isEmpty() )
-    {
-        const QSslCertificate peerCertificate = socket_.sslConfiguration().peerCertificate();
-        if ( peerCertificate.isNull() )
-        {
-            emit transportError(QStringLiteral("tls peer certificate is missing"));
-            socket_.close(
-                QWebSocketProtocol::CloseCodePolicyViolated,
-                QStringLiteral("tls cert missing")
-            );
-            return;
-        }
-
-        const QString actualFingerprint = QString::fromLatin1(
-            peerCertificate.digest(QCryptographicHash::Sha256).toHex()
-        );
-        const QString expectedFingerprint = CryptoEncoding::normalizeFingerprint(
-            options_.tlsFingerprint
-        );
-        if ( CryptoEncoding::normalizeFingerprint(actualFingerprint) != expectedFingerprint )
-        {
-            emit transportError(QStringLiteral("tls fingerprint mismatch"));
-            socket_.close(
-                QWebSocketProtocol::CloseCodePolicyViolated,
-                QStringLiteral("tls fingerprint mismatch")
-            );
-            return;
-        }
-    }
-
     emit opened();
 }
 
@@ -261,12 +223,6 @@ void GatewayClient::onTextMessageReceived(const QString &message)
 
 void GatewayClient::onSslErrors(const QList<QSslError> &errors)
 {
-    if ( !options_.tlsFingerprint.trimmed().isEmpty() )
-    {
-        socket_.ignoreSslErrors();
-        return;
-    }
-
     QStringList errorTexts;
     for ( const QSslError &error : errors )
     {
