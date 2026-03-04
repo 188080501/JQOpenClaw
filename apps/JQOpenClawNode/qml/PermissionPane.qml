@@ -47,6 +47,7 @@ JQPane {
         processWhich.checked = readBool(permissionObject, "process.which");
         systemScreenshot.checked = readBool(permissionObject, "system.screenshot");
         systemInfo.checked = readBool(permissionObject, "system.info");
+        systemNotify.checked = readBool(permissionObject, "system.notify");
         systemInput.checked = readBool(permissionObject, "system.input");
         applyingConfig = false;
     }
@@ -70,6 +71,7 @@ JQPane {
         permissionObject["process.which"] = processWhich.checked;
         permissionObject["system.screenshot"] = systemScreenshot.checked;
         permissionObject["system.info"] = systemInfo.checked;
+        permissionObject["system.notify"] = systemNotify.checked;
         permissionObject["system.input"] = systemInput.checked;
 
         nextConfig.permissions = permissionObject;
@@ -149,6 +151,13 @@ JQPane {
             titleText: qsTr("system.info")
             titleWidth: 170
             tipText: qsTr("采集系统基础信息：CPU、主机名、系统版本、用户名、内存、GPU、IP、硬盘容量等。")
+        }
+
+        JQSettingsCheckBox {
+            id: systemNotify
+            titleText: qsTr("system.notify")
+            titleWidth: 170
+            tipText: qsTr("系统弹窗能力：弹出消息提示框（支持 message，title 可选）。")
         }
 
         JQSettingsCheckBox {

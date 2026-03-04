@@ -544,10 +544,26 @@
 - `ip`
 - `disks`
 
-## 9. 常见错误与处理
+## 9. system.notify
+
+用途：弹出系统消息提示框。参数校验通过后会异步投递弹窗请求，`node.invoke` 会立即返回。
+
+参数（`params`）：
+- `message`：字符串，必填，非空，长度范围 `[1, 4000]`
+- `title`：字符串，可选，默认 `JQOpenClaw`，长度上限 `120`
+
+返回（`payload`）：
+- `operation`：固定 `notify`
+- `title`
+- `message`
+- `shown`：固定 `true`
+- `async`：固定 `true`
+- `ok`：固定 `true`
+
+## 10. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `process.which` / `system.input` 参数校验失败）。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `process.which` / `system.notify` / `system.input` 参数校验失败）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
@@ -584,11 +600,13 @@
   - 检查 `node.describe.commands`。
 - `SYSTEM_INPUT_FAILED`
   - `system.input` 请求投递失败（例如线程池不可用、平台不支持）。
+- `SYSTEM_NOTIFY_FAILED`
+  - `system.notify` 请求投递失败（如应用实例不可用、UI 线程分发失败）。
 - `command not allowlisted`
   - 网关策略拦截。
-  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`process.exec`、`process.which`、`system.input`）。
+  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`process.exec`、`process.which`、`system.notify`、`system.input`）。
 
-## 10. system.input
+## 11. system.input
 
 用途：控制鼠标与键盘输入，支持一个请求内多动作顺序执行。
 说明：参数校验通过后请求会异步入队，`node.invoke` 立即返回，不等待动作执行完成。

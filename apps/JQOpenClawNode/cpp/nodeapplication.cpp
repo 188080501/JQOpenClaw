@@ -40,6 +40,7 @@
 #include "capabilities/process/processwhich.h"
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
+#include "capabilities/system/systemnotify.h"
 #include "capabilities/system/systeminput.h"
 #include "crypto/secretbox/secretboxcrypto.h"
 #include "crypto/signing/deviceauth.h"
@@ -2106,6 +2107,37 @@ bool NodeApplication::executeInvokeCommand(
         }
 
         *payload = inputResult;
+        return true;
+    }
+
+    if ( command == QStringLiteral("system.notify") )
+    {
+        QJsonObject notifyResult;
+        QString notifyError;
+        bool invalidParams = false;
+        if ( !SystemNotify::execute(
+                params,
+                &notifyResult,
+                &notifyError,
+                &invalidParams
+            ) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("SYSTEM_NOTIFY_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = notifyError.isEmpty()
+                    ? QStringLiteral("failed to run system notify")
+                    : notifyError;
+            }
+            return false;
+        }
+
+        *payload = notifyResult;
         return true;
     }
 

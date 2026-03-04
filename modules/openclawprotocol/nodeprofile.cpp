@@ -22,6 +22,7 @@ const CapabilityDeclaration capabilityDeclarations[] =
     {"process", "process.which", true},
     {"system", "system.screenshot", true},
     {"system", "system.info", true},
+    {"system", "system.notify", true},
     {"system", "system.input", true},
 };
 
