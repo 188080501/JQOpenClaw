@@ -37,6 +37,7 @@
 #include "capabilities/file/fileaccesswrite.h"
 #include "capabilities/process/processmanage.h"
 #include "capabilities/process/processexec.h"
+#include "capabilities/process/processwhich.h"
 #include "capabilities/system/systemscreenshot.h"
 #include "capabilities/system/systeminfo.h"
 #include "capabilities/system/systeminput.h"
@@ -2137,6 +2138,37 @@ bool NodeApplication::executeInvokeCommand(
         }
 
         *payload = executeResult;
+        return true;
+    }
+
+    if ( command == QStringLiteral("process.which") )
+    {
+        QJsonObject whichResult;
+        QString whichError;
+        bool invalidParams = false;
+        if ( !ProcessWhich::execute(
+                params,
+                &whichResult,
+                &whichError,
+                &invalidParams
+            ) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("PROCESS_WHICH_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = whichError.isEmpty()
+                    ? QStringLiteral("failed to locate executable")
+                    : whichError;
+            }
+            return false;
+        }
+
+        *payload = whichResult;
         return true;
     }
 

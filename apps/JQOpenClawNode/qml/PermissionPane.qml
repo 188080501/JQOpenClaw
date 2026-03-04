@@ -44,6 +44,7 @@ JQPane {
         fileWrite.checked = readBool(permissionObject, "file.write");
         processManage.checked = readBool(permissionObject, "process.manage");
         processExec.checked = readBool(permissionObject, "process.exec");
+        processWhich.checked = readBool(permissionObject, "process.which");
         systemScreenshot.checked = readBool(permissionObject, "system.screenshot");
         systemInfo.checked = readBool(permissionObject, "system.info");
         systemInput.checked = readBool(permissionObject, "system.input");
@@ -66,6 +67,7 @@ JQPane {
         permissionObject["file.write"] = fileWrite.checked;
         permissionObject["process.manage"] = processManage.checked;
         permissionObject["process.exec"] = processExec.checked;
+        permissionObject["process.which"] = processWhich.checked;
         permissionObject["system.screenshot"] = systemScreenshot.checked;
         permissionObject["system.info"] = systemInfo.checked;
         permissionObject["system.input"] = systemInput.checked;
@@ -126,6 +128,13 @@ JQPane {
             titleText: qsTr("process.exec")
             titleWidth: 170
             tipText: qsTr("基于 QProcess 远程执行进程命令，返回 exitCode/stdout/stderr 等结果。")
+        }
+
+        JQSettingsCheckBox {
+            id: processWhich
+            titleText: qsTr("process.which")
+            titleWidth: 170
+            tipText: qsTr("探测命令是否可执行并返回可执行路径，支持 program 或 programs 批量查询。")
         }
 
         JQSettingsCheckBox {

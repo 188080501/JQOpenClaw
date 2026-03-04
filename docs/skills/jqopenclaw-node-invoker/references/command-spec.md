@@ -392,7 +392,49 @@
 - `resultClass=timeout`（或 `timedOut=true`）时，`node.invoke` 仍返回成功结构，调用方应按业务将其视为超时失败。
 - 无进程级错误时，不返回 `processError*` 字段。
 
-## 5. process.manage
+## 5. process.which
+
+用途：探测命令在节点环境中是否可执行，并返回可用路径。
+
+`params`：
+- `program`：字符串，可选。单个命令名。
+- `programs`：字符串数组，可选。批量命令名列表。
+- 约束：
+  - `program` 与 `programs` 至少提供一个。
+  - `programs` 长度范围 `[1, 200]`。
+  - 若同时提供，节点会合并去重后统一探测。
+
+示例：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "process.which",
+    "params": {
+      "programs": ["git", "python", "ffmpeg"]
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
+返回重点（payload）：
+- `operation`：固定 `which`
+- `requestedCount` / `foundCount` / `allFound`
+- `results`：数组元素字段：
+  - `program`
+  - `backend`（`where` / `which` / `qt.findExecutable`）
+  - `found`
+  - `path`（仅命中时返回）
+  - `allPaths`
+
+兼容字段（仅单命令时返回）：
+- `program` / `backend` / `found` / `path` / `allPaths`
+
+## 6. process.manage
 
 用途：进程管理（当前仅支持 Windows），支持进程列表、搜索和终止。
 
@@ -471,7 +513,7 @@
   - `exitCode`（可选）
   - `waitResult` 取值：`signaled` / `timeout` / `abandoned` / `unknown`。
 
-## 6. system.screenshot
+## 7. system.screenshot
 
 用途：采集全部屏幕截图并返回上传后的 URL 信息。
 
@@ -484,7 +526,7 @@
 - `screenIndex`
 - `screenName`（可选）
 
-## 7. system.info
+## 8. system.info
 
 用途：采集系统基础信息。
 
@@ -502,10 +544,10 @@
 - `ip`
 - `disks`
 
-## 8. 常见错误与处理
+## 9. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `system.input` 参数校验失败）。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `process.which` / `system.input` 参数校验失败）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
@@ -519,6 +561,10 @@
 - `PROCESS_EXEC_FAILED`
   - 常见原因：程序不存在、权限不足、启动失败等无法产出结构化执行结果。
   - 优先检查 `program`、`workingDirectory`、权限、运行环境。
+
+- `PROCESS_WHICH_FAILED`
+  - 常见原因：探测流程内部异常。
+  - 建议检查节点日志并重试。
 
 - `SYSTEM_INFO_FAILED`
   - 系统信息采集失败。
@@ -540,9 +586,9 @@
   - `system.input` 请求投递失败（例如线程池不可用、平台不支持）。
 - `command not allowlisted`
   - 网关策略拦截。
-  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`system.input`）。
+  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`process.exec`、`process.which`、`system.input`）。
 
-## 9. system.input
+## 10. system.input
 
 用途：控制鼠标与键盘输入，支持一个请求内多动作顺序执行。
 说明：参数校验通过后请求会异步入队，`node.invoke` 立即返回，不等待动作执行完成。
