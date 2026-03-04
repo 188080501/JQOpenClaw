@@ -600,6 +600,8 @@
 - `actions[i].type` 支持：
   - `mouse.move`：`mode=absolute|relative`，`x`，`y`
   - `mouse.click`：`button=left|right`，可选 `count`
+  - `mouse.scroll`：`delta|deltaY`（二选一，范围 `[-12000, 12000]`），可选 `deltaX`（范围 `[-12000, 12000]`）
+  - `mouse.drag`：`mode=absolute|relative`，`x`，`y`，可选 `button=left|right`
   - `keyboard.down` / `keyboard.up` / `keyboard.tap`：`key`
   - `keyboard.text`：`text`（非空），可选 `intervalMs`
   - `delay`：`ms`
@@ -623,6 +625,8 @@
       "actions": [
         { "type": "mouse.move", "mode": "absolute", "x": 1200, "y": 700 },
         { "type": "mouse.click", "button": "left" },
+        { "type": "mouse.scroll", "deltaY": -120, "deltaX": 0 },
+        { "type": "mouse.drag", "mode": "absolute", "x": 1400, "y": 700, "button": "left" },
         { "type": "delay", "ms": 150 },
         { "type": "keyboard.text", "text": "OpenClaw", "intervalMs": 20 }
       ]

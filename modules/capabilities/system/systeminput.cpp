@@ -30,6 +30,8 @@ const int inputDelayMaxMs = 60000;
 const int inputTextIntervalMaxMs = 1000;
 const int inputClickMinCount = 1;
 const int inputClickMaxCount = 100;
+const int inputScrollMinDelta = -12000;
+const int inputScrollMaxDelta = 12000;
 const int inputTapHoldMs = 40;
 const int inputCancellationPollMs = 20;
 
@@ -37,6 +39,8 @@ enum class InputActionType
 {
     MouseMove,
     MouseClick,
+    MouseScroll,
+    MouseDrag,
     KeyboardDown,
     KeyboardUp,
     KeyboardTap,
@@ -53,6 +57,8 @@ struct InputActionRequest
     int y = 0;
     QString mouseButton = QStringLiteral("left");
     int clickCount = 1;
+    int scrollDeltaX = 0;
+    int scrollDeltaY = 0;
     QString keyName;
     quint16 virtualKey = 0;
     QString text;
@@ -652,6 +658,148 @@ bool parseInputAction(
         return true;
     }
 
+    if ( actionType == QStringLiteral("mouse.scroll") )
+    {
+        actionRequest->type = InputActionType::MouseScroll;
+        const bool hasDelta = actionObject.contains(QStringLiteral("delta"));
+        const bool hasDeltaY = actionObject.contains(QStringLiteral("deltaY"));
+        if ( !hasDelta && !hasDeltaY )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "system.input actions[%1] mouse.scroll requires delta or deltaY"
+                ).arg(index);
+            }
+            return false;
+        }
+        if ( hasDelta && hasDeltaY )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "system.input actions[%1] mouse.scroll cannot specify both delta and deltaY"
+                ).arg(index);
+            }
+            return false;
+        }
+
+        const QString verticalField = hasDelta
+            ? QStringLiteral("delta")
+            : QStringLiteral("deltaY");
+        if ( !parseRequiredInt(
+                actionObject,
+                verticalField,
+                inputScrollMinDelta,
+                inputScrollMaxDelta,
+                &actionRequest->scrollDeltaY,
+                error
+            ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("system.input actions[%1] %2")
+                    .arg(index)
+                    .arg(*error);
+            }
+            return false;
+        }
+
+        if ( !parseOptionalInt(
+                actionObject,
+                QStringLiteral("deltaX"),
+                inputScrollMinDelta,
+                inputScrollMaxDelta,
+                0,
+                &actionRequest->scrollDeltaX,
+                error
+            ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("system.input actions[%1] %2")
+                    .arg(index)
+                    .arg(*error);
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    if ( actionType == QStringLiteral("mouse.drag") )
+    {
+        actionRequest->type = InputActionType::MouseDrag;
+        if ( !parseRequiredInt(
+                actionObject,
+                QStringLiteral("x"),
+                (std::numeric_limits<int>::min)(),
+                (std::numeric_limits<int>::max)(),
+                &actionRequest->x,
+                error
+            ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("system.input actions[%1] %2")
+                    .arg(index)
+                    .arg(*error);
+            }
+            return false;
+        }
+        if ( !parseRequiredInt(
+                actionObject,
+                QStringLiteral("y"),
+                (std::numeric_limits<int>::min)(),
+                (std::numeric_limits<int>::max)(),
+                &actionRequest->y,
+                error
+            ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("system.input actions[%1] %2")
+                    .arg(index)
+                    .arg(*error);
+            }
+            return false;
+        }
+
+        const QString mode = extractString(actionObject, QStringLiteral("mode")).toLower();
+        actionRequest->moveMode = mode.isEmpty()
+            ? QStringLiteral("absolute")
+            : mode;
+        if ( ( actionRequest->moveMode != QStringLiteral("absolute") ) &&
+             ( actionRequest->moveMode != QStringLiteral("relative") ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "system.input actions[%1] mouse.drag mode must be absolute or relative"
+                ).arg(index);
+            }
+            return false;
+        }
+
+        const QString button = extractString(actionObject, QStringLiteral("button")).toLower();
+        actionRequest->mouseButton = button.isEmpty()
+            ? QStringLiteral("left")
+            : button;
+        if ( ( actionRequest->mouseButton != QStringLiteral("left") ) &&
+             ( actionRequest->mouseButton != QStringLiteral("right") ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "system.input actions[%1] mouse.drag button must be left or right"
+                ).arg(index);
+            }
+            return false;
+        }
+
+        return true;
+    }
+
     if ( ( actionType == QStringLiteral("keyboard.down") ) ||
          ( actionType == QStringLiteral("keyboard.up") ) ||
          ( actionType == QStringLiteral("keyboard.tap") ) )
@@ -955,12 +1103,31 @@ bool sendMouseMoveRelative(int x, int y, QString *error)
     return sendMouseMoveAbsolute(boundedX, boundedY, error);
 }
 
-bool sendMouseClick(const QString &button, int count, quint64 dispatchId, QString *error)
+bool sendMouseButtonEvent(const QString &button, bool down, QString *error)
 {
     const bool isLeftButton = ( button == QStringLiteral("left") );
-    const DWORD downFlag = isLeftButton ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_RIGHTDOWN;
-    const DWORD upFlag = isLeftButton ? MOUSEEVENTF_LEFTUP : MOUSEEVENTF_RIGHTUP;
+    const DWORD eventFlag = isLeftButton
+        ? ( down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP )
+        : ( down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP );
 
+    INPUT input = {};
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = eventFlag;
+    if ( SendInput(1, &input, sizeof(INPUT)) != 1 )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to send mouse button event: %1")
+                .arg(win32ErrorMessage(GetLastError()));
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool sendMouseClick(const QString &button, int count, quint64 dispatchId, QString *error)
+{
     for ( int i = 0; i < count; ++i )
     {
         if ( !isInputDispatchCurrent(dispatchId) )
@@ -968,20 +1135,123 @@ bool sendMouseClick(const QString &button, int count, quint64 dispatchId, QStrin
             return setCancelledError(error);
         }
 
-        INPUT inputs[2] = {};
-        inputs[0].type = INPUT_MOUSE;
-        inputs[0].mi.dwFlags = downFlag;
-        inputs[1].type = INPUT_MOUSE;
-        inputs[1].mi.dwFlags = upFlag;
-        if ( SendInput(2, inputs, sizeof(INPUT)) != 2 )
+        QString clickError;
+        if ( !sendMouseButtonEvent(button, true, &clickError) ||
+             !sendMouseButtonEvent(button, false, &clickError) )
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("failed to send mouse click: %1")
-                    .arg(win32ErrorMessage(GetLastError()));
+                *error = clickError;
             }
             return false;
         }
+    }
+
+    return true;
+}
+
+bool sendMouseScroll(int deltaX, int deltaY, quint64 dispatchId, QString *error)
+{
+    if ( !isInputDispatchCurrent(dispatchId) )
+    {
+        return setCancelledError(error);
+    }
+
+    INPUT inputs[2] = {};
+    UINT inputCount = 0;
+    if ( deltaY != 0 )
+    {
+        inputs[inputCount].type = INPUT_MOUSE;
+        inputs[inputCount].mi.dwFlags = MOUSEEVENTF_WHEEL;
+        inputs[inputCount].mi.mouseData = static_cast<DWORD>(static_cast<LONG>(deltaY));
+        ++inputCount;
+    }
+    if ( deltaX != 0 )
+    {
+        inputs[inputCount].type = INPUT_MOUSE;
+        inputs[inputCount].mi.dwFlags = MOUSEEVENTF_HWHEEL;
+        inputs[inputCount].mi.mouseData = static_cast<DWORD>(static_cast<LONG>(deltaX));
+        ++inputCount;
+    }
+
+    if ( inputCount == 0 )
+    {
+        return true;
+    }
+
+    if ( SendInput(inputCount, inputs, sizeof(INPUT)) != inputCount )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("failed to send mouse scroll: %1")
+                .arg(win32ErrorMessage(GetLastError()));
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool sendMouseDrag(
+    const QString &button,
+    const QString &mode,
+    int x,
+    int y,
+    quint64 dispatchId,
+    QString *error
+)
+{
+    if ( !isInputDispatchCurrent(dispatchId) )
+    {
+        return setCancelledError(error);
+    }
+
+    if ( !sendMouseButtonEvent(button, true, error) )
+    {
+        return false;
+    }
+
+    if ( !isInputDispatchCurrent(dispatchId) )
+    {
+        QString releaseError;
+        if ( !sendMouseButtonEvent(button, false, &releaseError) )
+        {
+            qWarning().noquote() << QStringLiteral(
+                "[capability.system.input] failed to release mouse button after drag cancellation: %1"
+            ).arg(releaseError);
+        }
+        return setCancelledError(error);
+    }
+
+    QString dragError;
+    const bool moveOk = ( mode == QStringLiteral("relative") )
+        ? sendMouseMoveRelative(x, y, &dragError)
+        : sendMouseMoveAbsolute(x, y, &dragError);
+    if ( !moveOk )
+    {
+        QString releaseError;
+        if ( !sendMouseButtonEvent(button, false, &releaseError) )
+        {
+            qWarning().noquote() << QStringLiteral(
+                "[capability.system.input] failed to release mouse button after drag move failure: %1"
+            ).arg(releaseError);
+        }
+        if ( error != nullptr )
+        {
+            *error = dragError;
+        }
+        return false;
+    }
+
+    const bool cancelled = !isInputDispatchCurrent(dispatchId);
+    if ( !sendMouseButtonEvent(button, false, error) )
+    {
+        return false;
+    }
+
+    if ( cancelled )
+    {
+        return setCancelledError(error);
     }
 
     return true;
@@ -1117,6 +1387,17 @@ bool executeAction(
         return sendMouseMoveAbsolute(action.x, action.y, error);
     case InputActionType::MouseClick:
         return sendMouseClick(action.mouseButton, action.clickCount, dispatchId, error);
+    case InputActionType::MouseScroll:
+        return sendMouseScroll(action.scrollDeltaX, action.scrollDeltaY, dispatchId, error);
+    case InputActionType::MouseDrag:
+        return sendMouseDrag(
+            action.mouseButton,
+            action.moveMode,
+            action.x,
+            action.y,
+            dispatchId,
+            error
+        );
     case InputActionType::KeyboardDown:
         if ( !sendKeyboardVirtualKey(action.virtualKey, false, error) )
         {

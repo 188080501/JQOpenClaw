@@ -155,7 +155,7 @@ JQPane {
             id: systemInput
             titleText: qsTr("system.input")
             titleWidth: 170
-            tipText: qsTr("输入控制动作列表：mouse.move/click、keyboard.down/up/tap/text、delay；异步入队且 latest-wins。")
+            tipText: qsTr("输入控制动作列表：mouse.move/click/scroll/drag、keyboard.down/up/tap/text、delay；异步入队且 latest-wins。")
         }
 
         Row {
