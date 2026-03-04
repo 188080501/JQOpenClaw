@@ -16,6 +16,8 @@ JQPane {
         spacing: 12
 
         Text {
+            width: parent.width
+            wrapMode: Text.Wrap
             font.pixelSize: 18
             text: qsTr("连接状态: %1").arg(nodeApplication.connectionStateText)
             color: {

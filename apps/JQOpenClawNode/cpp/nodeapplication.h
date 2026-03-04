@@ -95,6 +95,7 @@ private:
         const QString &message
     );
     void sendConnectRequest(const QString &nonce);
+    static bool isPairingRequiredConnectError(const QJsonObject &errorObject);
     static QString parseErrorMessage(const QJsonObject &errorObject);
     static QString generateDefaultDisplayName();
     static QJsonObject defaultConfig();

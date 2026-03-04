@@ -1356,10 +1356,20 @@ void NodeApplication::onConnectAccepted(const QJsonObject &payload)
 void NodeApplication::onConnectRejected(const QJsonObject &error)
 {
     const QString message = parseErrorMessage(error);
-    setConnectionState(ConnectionState::Pairing);
+    if ( isPairingRequiredConnectError(error) )
+    {
+        setConnectionState(ConnectionState::Pairing);
+        connectionStateDetail_ = message;
+        updateConnectionStatusAction();
+        qWarning().noquote() << QStringLiteral("gateway connect rejected, waiting for pairing: %1").arg(message);
+        startPairingReconnect();
+        return;
+    }
+
+    setConnectionState(ConnectionState::Error);
     connectionStateDetail_ = message;
     updateConnectionStatusAction();
-    qWarning().noquote() << QStringLiteral("gateway connect rejected, waiting for pairing: %1").arg(message);
+    qWarning().noquote() << QStringLiteral("gateway connect rejected: %1").arg(message);
     startPairingReconnect();
 }
 
@@ -2457,6 +2467,69 @@ QString NodeApplication::parseErrorMessage(const QJsonObject &errorObject)
     {
         return message;
     }
+
+    const QJsonObject detailsObject = errorObject.value("details").toObject();
+    const QString detailsMessage = detailsObject.value("message").toString().trimmed();
+    if ( !detailsMessage.isEmpty() )
+    {
+        return detailsMessage;
+    }
+
+    const QString detailsCode = detailsObject.value("code").toString().trimmed();
+    if ( !detailsCode.isEmpty() )
+    {
+        return detailsCode;
+    }
+
+    const QString detailsReason = detailsObject.value("reason").toString().trimmed();
+    if ( !detailsReason.isEmpty() )
+    {
+        return detailsReason;
+    }
+
+    const QString code = errorObject.value("code").toString().trimmed();
+    if ( !code.isEmpty() )
+    {
+        return code;
+    }
+
     return QStringLiteral("unknown connect error");
+}
+
+bool NodeApplication::isPairingRequiredConnectError(const QJsonObject &errorObject)
+{
+    const QJsonObject detailsObject = errorObject.value("details").toObject();
+
+    const QString detailsCode = detailsObject.value("code").toString().trimmed().toUpper();
+    if ( detailsCode == QStringLiteral("PAIRING_REQUIRED") ||
+         detailsCode == QStringLiteral("NOT_PAIRED") )
+    {
+        return true;
+    }
+
+    const QString detailsReason = detailsObject.value("reason").toString().trimmed().toLower();
+    if ( detailsReason == QStringLiteral("pairing_required") ||
+         detailsReason == QStringLiteral("not_paired") )
+    {
+        return true;
+    }
+
+    const QString detailsMessage = detailsObject.value("message").toString().trimmed().toLower();
+    if ( detailsMessage.contains(QStringLiteral("pairing required")) ||
+         detailsMessage.contains(QStringLiteral("not paired")) )
+    {
+        return true;
+    }
+
+    const QString code = errorObject.value("code").toString().trimmed().toUpper();
+    if ( code == QStringLiteral("PAIRING_REQUIRED") ||
+         code == QStringLiteral("NOT_PAIRED") )
+    {
+        return true;
+    }
+
+    const QString message = errorObject.value("message").toString().trimmed().toLower();
+    return message.contains(QStringLiteral("pairing required")) ||
+        message.contains(QStringLiteral("not paired"));
 }
 
