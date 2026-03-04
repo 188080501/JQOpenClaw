@@ -21,18 +21,10 @@ TextField {
             !jqTextField.copyEnabled &&
             (
                 event.matches(StandardKey.Copy) ||
-                event.matches(StandardKey.Cut) ||
-                event.matches(StandardKey.SelectAll)
+                event.matches(StandardKey.Cut)
             )
         ) {
             event.accepted = true;
-        }
-    }
-
-    onSelectedTextChanged: {
-        if ( !jqTextField.copyEnabled && jqTextField.selectedText.length > 0 )
-        {
-            jqTextField.deselect();
         }
     }
 }
