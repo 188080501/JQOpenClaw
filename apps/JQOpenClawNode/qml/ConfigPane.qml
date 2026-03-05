@@ -45,7 +45,6 @@ JQPane {
         nextConfig.gatewayUrl = gatewayUrl.text.trim();
         nextConfig.token = gatewayToken.text;
         nextConfig.displayName = displayName.text.trim();
-        nextConfig.nodeId = nodeId.text.trim();
         nextConfig.identityPath = identityPath.text.trim();
         nextConfig.fileServerUrl = fileServerUrl.text.trim();
         nextConfig.fileServerToken = fileServerToken.text;
@@ -111,6 +110,8 @@ JQPane {
                 titleText: qsTr("实例ID")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24
+                readOnly: true
+                tipText: qsTr("实例ID在首次启动时自动生成，不允许手动修改")
             }
 
             JQSettingsTextField {
