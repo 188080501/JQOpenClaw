@@ -1,6 +1,7 @@
 HEADERS *= \
     $$PWD/capabilities/file/fileaccessread.h \
     $$PWD/capabilities/file/fileaccesswrite.h \
+    $$PWD/capabilities/node/nodeselfupdate.h \
     $$PWD/capabilities/process/processmanage.h \
     $$PWD/capabilities/process/processexec.h \
     $$PWD/capabilities/process/processwhich.h \
@@ -13,6 +14,7 @@ HEADERS *= \
 SOURCES *= \
     $$PWD/capabilities/file/fileaccessread.cpp \
     $$PWD/capabilities/file/fileaccesswrite.cpp \
+    $$PWD/capabilities/node/nodeselfupdate.cpp \
     $$PWD/capabilities/process/processmanage.cpp \
     $$PWD/capabilities/process/processexec.cpp \
     $$PWD/capabilities/process/processwhich.cpp \

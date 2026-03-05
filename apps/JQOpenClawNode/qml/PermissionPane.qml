@@ -50,6 +50,7 @@ JQPane {
         systemNotify.checked = readBool(permissionObject, "system.notify");
         systemClipboard.checked = readBool(permissionObject, "system.clipboard");
         systemInput.checked = readBool(permissionObject, "system.input");
+        nodeSelfUpdate.checked = readBool(permissionObject, "node.selfUpdate");
         applyingConfig = false;
     }
 
@@ -75,6 +76,7 @@ JQPane {
         permissionObject["system.notify"] = systemNotify.checked;
         permissionObject["system.clipboard"] = systemClipboard.checked;
         permissionObject["system.input"] = systemInput.checked;
+        permissionObject["node.selfUpdate"] = nodeSelfUpdate.checked;
 
         nextConfig.permissions = permissionObject;
         return nextConfig;
@@ -174,6 +176,13 @@ JQPane {
             titleText: qsTr("system.input")
             titleWidth: 170
             tipText: qsTr("输入控制动作列表：mouse.move/click/scroll/drag、keyboard.down/up/tap/text、delay；异步入队且 latest-wins。")
+        }
+
+        JQSettingsCheckBox {
+            id: nodeSelfUpdate
+            titleText: qsTr("node.selfUpdate")
+            titleWidth: 170
+            tipText: qsTr("节点自更新能力：下载更新包并启动替换脚本，回包后自动退出当前进程。")
         }
 
         Row {

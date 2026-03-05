@@ -25,6 +25,7 @@ const CapabilityDeclaration capabilityDeclarations[] =
     {"system", "system.notify", true},
     {"system", "system.clipboard", true},
     {"system", "system.input", true},
+    {"node", "node.selfUpdate", true},
 };
 
 bool resolvePermission(

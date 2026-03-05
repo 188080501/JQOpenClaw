@@ -36,6 +36,7 @@
 // JQOpenClaw import
 #include "capabilities/file/fileaccessread.h"
 #include "capabilities/file/fileaccesswrite.h"
+#include "capabilities/node/nodeselfupdate.h"
 #include "capabilities/process/processmanage.h"
 #include "capabilities/process/processexec.h"
 #include "capabilities/process/processwhich.h"
@@ -49,12 +50,20 @@
 #include "openclawprotocol/noderegistrar.h"
 #include "openclawprotocol/nodeprofile.h"
 
+#if defined(Q_OS_WIN)
+#include <windows.h>
+#else
+#include <cstdlib>
+#endif
+
 namespace
 {
 constexpr int kPairingReconnectIntervalMs = 15000;
 constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
 constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
 constexpr int kScreenshotUploadTimeoutMs = 30000;
+// Internal-only delay before process exit after self-update response is sent.
+constexpr int kSelfUpdateExitDelayMs = 200;
 constexpr auto kDefaultGatewayUrl = "ws://127.0.0.1:18789";
 
 QString startupCommandLine()
@@ -436,7 +445,7 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
 
     const double rawTimeoutMs = timeoutValue.toDouble();
     if ( ( rawTimeoutMs < 0.0 ) ||
-         ( rawTimeoutMs > static_cast<double>(std::numeric_limits<int>::max()) ) )
+         ( rawTimeoutMs > static_cast<double>((std::numeric_limits<int>::max)()) ) )
     {
         if ( error != nullptr )
         {
@@ -457,6 +466,15 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
 
     *timeoutMs = parsedTimeoutMs;
     return true;
+}
+
+void exitCurrentProcessViaCApi()
+{
+#if defined(Q_OS_WIN)
+    ::ExitProcess(0);
+#else
+    std::exit(0);
+#endif
 }
 }
 
@@ -1735,6 +1753,26 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     qInfo().noquote() << QStringLiteral(
         "[node.invoke] command done id=%1 command=%2"
     ).arg(invokeId, command);
+
+    if ( command == QStringLiteral("node.selfUpdate") &&
+         responsePayload.isObject() )
+    {
+        const QJsonObject selfUpdatePayload = responsePayload.toObject();
+        if ( selfUpdatePayload.value(QStringLiteral("willExit")).toBool(false) )
+        {
+            qInfo().noquote() << QStringLiteral(
+                "[node.selfUpdate] invoke response sent, exit in %1ms"
+            ).arg(QString::number(kSelfUpdateExitDelayMs));
+            QTimer::singleShot(
+                kSelfUpdateExitDelayMs,
+                this,
+                []()
+                {
+                    exitCurrentProcessViaCApi();
+                }
+            );
+        }
+    }
 }
 
 void NodeApplication::onTransportError(const QString &message)
@@ -2040,6 +2078,48 @@ bool NodeApplication::executeInvokeCommand(
             *errorMessage = QStringLiteral("command disabled by node permission: %1").arg(command);
         }
         return false;
+    }
+
+    if ( command == QStringLiteral("node.selfUpdate") )
+    {
+        QJsonObject selfUpdateResult;
+        QString selfUpdateError;
+        bool invalidParams = false;
+        bool md5Mismatch = false;
+        if ( !NodeSelfUpdate::execute(
+                params,
+                &selfUpdateResult,
+                &selfUpdateError,
+                &invalidParams,
+                &md5Mismatch
+            ) )
+        {
+            if ( errorCode != nullptr )
+            {
+                if ( invalidParams )
+                {
+                    *errorCode = QStringLiteral("INVALID_PARAMS");
+                }
+                else if ( md5Mismatch )
+                {
+                    *errorCode = QStringLiteral("NODE_SELF_UPDATE_MD5_MISMATCH");
+                }
+                else
+                {
+                    *errorCode = QStringLiteral("NODE_SELF_UPDATE_FAILED");
+                }
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = selfUpdateError.isEmpty()
+                    ? QStringLiteral("failed to execute node self update")
+                    : selfUpdateError;
+            }
+            return false;
+        }
+
+        *payload = selfUpdateResult;
+        return true;
     }
 
     if ( command == QStringLiteral("system.info") )

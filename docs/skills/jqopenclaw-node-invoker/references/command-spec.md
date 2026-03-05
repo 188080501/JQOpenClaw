@@ -617,10 +617,38 @@
 }
 ```
 
-## 11. 常见错误与处理
+## 11. node.selfUpdate
+
+用途：执行节点自更新。流程为参数校验 ->（可选）当前程序 MD5 比对 -> HTTP 下载 ->（可选）下载包 MD5 比对 -> 写入临时文件 -> 生成并启动更新 bat -> `node.invoke` 回包后延迟退出当前节点。
+
+`params`：
+- `downloadUrl`：字符串，必填。新版本程序完整下载地址（仅支持 `http/https`）。
+- `md5`：字符串，可选。32 位十六进制 MD5；若提供且与当前程序一致，返回无需更新。
+
+返回重点（`payload`）：
+- 无需更新：
+  - `operation=selfUpdate`
+  - `updated=false`
+  - `reason=md5_unchanged`
+  - `currentMd5`
+  - `expectedMd5`
+- 进入更新流程：
+  - `operation=selfUpdate`
+  - `updated=true`
+  - `downloadUrl`
+  - `downloadedMd5`
+  - `expectedMd5`（若调用时提供）
+  - `willExit=true`
+  - `status=exiting_for_self_update`
+
+注意：
+- 下载临时文件使用 UUID 文件名，不带 `.exe` 后缀。
+- 更新 bat 会自动删除临时文件和 bat 本身。
+
+## 12. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `process.which` / `system.notify` / `system.clipboard` / `system.input` 参数校验失败）。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `process.which` / `system.notify` / `system.clipboard` / `system.input` / `node.selfUpdate` 参数校验失败）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
@@ -661,11 +689,15 @@
   - `system.notify` 请求投递失败（如应用实例不可用、UI 线程分发失败）。
 - `SYSTEM_CLIPBOARD_FAILED`
   - `system.clipboard` 执行失败（如应用实例不可用、图形环境缺失、剪贴板访问失败）。
+- `NODE_SELF_UPDATE_FAILED`
+  - `node.selfUpdate` 执行失败（下载失败、HTTP 状态异常、临时文件写入失败、更新脚本启动失败等）。
+- `NODE_SELF_UPDATE_MD5_MISMATCH`
+  - `node.selfUpdate` 下载成功但 MD5 校验不匹配。
 - `command not allowlisted`
   - 网关策略拦截。
-  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`process.exec`、`process.which`、`system.notify`、`system.clipboard`、`system.input`）。
+  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`process.exec`、`process.which`、`system.notify`、`system.clipboard`、`system.input`、`node.selfUpdate`）。
 
-## 12. system.input
+## 13. system.input
 
 用途：控制鼠标与键盘输入，支持一个请求内多动作顺序执行。
 说明：参数校验通过后请求会异步入队，`node.invoke` 立即返回，不等待动作执行完成。
