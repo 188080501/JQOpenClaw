@@ -481,6 +481,7 @@
 - `kill` 参数：
   - `pid`：数字，必填，范围 `[1, 2147483647]`。
   - `waitMs`：数字，可选，默认 `3000`，范围 `[0, 30000]`。
+  - `force`：布尔，可选，默认 `true`。`true` 表示强制终止；`false` 表示发送非强杀退出请求（仅对具有顶层窗口的进程生效）。
   - 注意：`waitMs` 当前不会被 `node.invoke.timeoutMs` 二次裁剪，调用端应自行保证请求预算充足。
   - 默认拒绝终止关键进程（critical process）；仅当 `pid` 等于当前节点进程 PID 时允许。
 
@@ -515,7 +516,8 @@
     "params": {
       "operation": "kill",
       "pid": 12345,
-      "waitMs": 5000
+      "waitMs": 5000,
+      "force": true
     },
     "timeoutMs": 10000,
     "idempotencyKey": "<uuid>"
@@ -537,7 +539,7 @@
 - `kill` 返回字段：
   - `operation` / `pid`
   - `name`（可选）/ `path`（可选）/ `isWow64`（可选）
-  - `waitMs` / `waitResult` / `terminated` / `exited` / `resultClass`
+  - `force` / `waitMs` / `waitResult` / `terminated` / `exited` / `resultClass`
   - `exitCode`（可选）
   - `waitResult` 取值：`signaled` / `timeout` / `abandoned` / `unknown`。
 

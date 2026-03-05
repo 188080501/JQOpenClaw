@@ -46,6 +46,7 @@ struct ProcessManageRequest
     int pidFilter = 0;
     int pid = 0;
     int waitMs = processKillDefaultWaitMs;
+    bool force = true;
 };
 
 QString extractString(const QJsonObject &object, const QString &key)
@@ -296,13 +297,23 @@ bool parseManageRequest(
         {
             return false;
         }
-        return parseOptionalInt(
+        if ( !parseOptionalInt(
+                paramsObject,
+                QStringLiteral("waitMs"),
+                processKillMinWaitMs,
+                processKillMaxWaitMs,
+                processKillDefaultWaitMs,
+                &request->waitMs,
+                error
+            ) )
+        {
+            return false;
+        }
+        return parseOptionalBool(
             paramsObject,
-            QStringLiteral("waitMs"),
-            processKillMinWaitMs,
-            processKillMaxWaitMs,
-            processKillDefaultWaitMs,
-            &request->waitMs,
+            QStringLiteral("force"),
+            true,
+            &request->force,
             error
         );
     }
@@ -442,6 +453,49 @@ bool scheduleSelfTermination(QString *error)
 
     CloseHandle(threadHandle);
     return true;
+}
+
+struct GracefulTerminationContext
+{
+    DWORD processId = 0;
+    bool signalSent = false;
+};
+
+BOOL CALLBACK sendCloseToProcessWindowProc(HWND windowHandle, LPARAM userData)
+{
+    if ( userData == 0 )
+    {
+        return FALSE;
+    }
+
+    GracefulTerminationContext *context = reinterpret_cast<GracefulTerminationContext *>(userData);
+    DWORD windowProcessId = 0;
+    GetWindowThreadProcessId(windowHandle, &windowProcessId);
+    if ( windowProcessId != context->processId )
+    {
+        return TRUE;
+    }
+
+    // Only target top-level windows of the process.
+    if ( GetWindow(windowHandle, GW_OWNER) != nullptr )
+    {
+        return TRUE;
+    }
+
+    if ( PostMessageW(windowHandle, WM_CLOSE, 0, 0) != 0 )
+    {
+        context->signalSent = true;
+    }
+    return TRUE;
+}
+
+bool requestGracefulTermination(DWORD processId)
+{
+    GracefulTerminationContext context;
+    context.processId = processId;
+    context.signalSent = false;
+    EnumWindows(sendCloseToProcessWindowProc, reinterpret_cast<LPARAM>(&context));
+    return context.signalSent;
 }
 
 QString queryProcessPath(HANDLE processHandle)
@@ -791,8 +845,14 @@ bool runKillProcess(
     }
 
     const DWORD processId = static_cast<DWORD>(request.pid);
+    const DWORD currentProcessId = GetCurrentProcessId();
+    DWORD processAccess = PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE;
+    if ( request.force || ( processId == currentProcessId ) )
+    {
+        processAccess |= PROCESS_TERMINATE;
+    }
     HANDLE processHandle = OpenProcess(
-        PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | SYNCHRONIZE,
+        processAccess,
         FALSE,
         processId
     );
@@ -813,9 +873,18 @@ bool runKillProcess(
     bool isWow64 = false;
     hasIsWow64 = queryProcessIsWow64(processHandle, &isWow64);
 
-    const DWORD currentProcessId = GetCurrentProcessId();
     if ( processId == currentProcessId )
     {
+        if ( !request.force )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("process.manage self kill requires force=true");
+            }
+            CloseHandle(processHandle);
+            return false;
+        }
+
         // Special case: killing the node itself. Return normalized kill result first,
         // then terminate after a short internal delay so caller can receive JSON payload.
         if ( !scheduleSelfTermination(error) )
@@ -839,6 +908,7 @@ bool runKillProcess(
         {
             out.insert(QStringLiteral("isWow64"), isWow64);
         }
+        out.insert(QStringLiteral("force"), request.force);
         out.insert(QStringLiteral("waitMs"), request.waitMs);
         out.insert(QStringLiteral("waitResult"), QStringLiteral("timeout"));
         out.insert(QStringLiteral("terminated"), true);
@@ -879,12 +949,26 @@ bool runKillProcess(
         return false;
     }
 
-    if ( TerminateProcess(processHandle, 1) == 0 )
+    if ( request.force )
+    {
+        if ( TerminateProcess(processHandle, 1) == 0 )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("process.manage failed to terminate process pid=%1: %2")
+                    .arg(QString::number(request.pid), win32ErrorMessage(GetLastError()));
+            }
+            CloseHandle(processHandle);
+            return false;
+        }
+    }
+    else if ( !requestGracefulTermination(processId) )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.manage failed to terminate process pid=%1: %2")
-                .arg(QString::number(request.pid), win32ErrorMessage(GetLastError()));
+            *error = QStringLiteral(
+                "process.manage failed to request graceful termination pid=%1 (try force=true)"
+            ).arg(QString::number(request.pid));
         }
         CloseHandle(processHandle);
         return false;
@@ -924,6 +1008,7 @@ bool runKillProcess(
     {
         out.insert(QStringLiteral("isWow64"), isWow64);
     }
+    out.insert(QStringLiteral("force"), request.force);
     out.insert(QStringLiteral("waitMs"), request.waitMs);
     out.insert(QStringLiteral("waitResult"), waitResultName(waitResult));
     out.insert(QStringLiteral("terminated"), true);
