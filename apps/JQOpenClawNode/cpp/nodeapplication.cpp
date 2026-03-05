@@ -1479,6 +1479,34 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
         return;
     }
 
+    const QString localDeviceId = identity_.deviceId.trimmed();
+    if ( localDeviceId.isEmpty() )
+    {
+        qWarning().noquote() << QStringLiteral(
+            "[node.invoke] invalid state id=%1 command=%2 error=local device identity is empty"
+        ).arg(invokeId, command);
+        sendInvokeError(
+            invokeId,
+            nodeId,
+            QStringLiteral("INTERNAL_ERROR"),
+            QStringLiteral("local device identity is empty")
+        );
+        return;
+    }
+    if ( nodeId != localDeviceId )
+    {
+        qWarning().noquote() << QStringLiteral(
+            "[node.invoke] nodeId mismatch id=%1 command=%2"
+        ).arg(invokeId, command);
+        sendInvokeError(
+            invokeId,
+            nodeId,
+            QStringLiteral("INVALID_PARAMS"),
+            QStringLiteral("nodeId does not match local device identity")
+        );
+        return;
+    }
+
     if ( idempotencyKey.isEmpty() )
     {
         qWarning().noquote() << QStringLiteral(
