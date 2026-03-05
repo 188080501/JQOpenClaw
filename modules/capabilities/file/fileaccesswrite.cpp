@@ -376,6 +376,108 @@ bool removePath(
     }
     return false;
 }
+
+bool copyDirectoryRecursively(
+    const QString &sourceAbsolutePath,
+    const QString &destinationAbsolutePath,
+    QString *error
+)
+{
+    const QDir sourceDir(sourceAbsolutePath);
+    if ( !sourceDir.exists() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("source directory does not exist");
+        }
+        return false;
+    }
+
+    QDir destinationDir(destinationAbsolutePath);
+    if ( !destinationDir.exists() )
+    {
+        if ( !QDir().mkpath(destinationAbsolutePath) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("failed to create destination directory");
+            }
+            return false;
+        }
+    }
+
+    const QFileInfoList entries = sourceDir.entryInfoList(
+        QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System,
+        QDir::DirsFirst | QDir::Name
+    );
+    for ( const QFileInfo &entryInfo : entries )
+    {
+        const QString sourceEntryPath = entryInfo.absoluteFilePath();
+        const QString destinationEntryPath = destinationDir.filePath(entryInfo.fileName());
+
+        if ( entryInfo.isDir() && !entryInfo.isSymLink() )
+        {
+            QString childError;
+            if ( !copyDirectoryRecursively(sourceEntryPath, destinationEntryPath, &childError) )
+            {
+                if ( error != nullptr )
+                {
+                    *error = QStringLiteral("copy directory failed: %1").arg(childError);
+                }
+                return false;
+            }
+            continue;
+        }
+
+        QFile sourceFile(sourceEntryPath);
+        if ( !sourceFile.copy(destinationEntryPath) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("copy file failed: %1").arg(sourceFile.errorString().trimmed());
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool moveDirectoryWithFallback(
+    const QString &sourceAbsolutePath,
+    const QString &destinationAbsolutePath,
+    QString *error
+)
+{
+    QDir rootDir;
+    if ( rootDir.rename(sourceAbsolutePath, destinationAbsolutePath) )
+    {
+        return true;
+    }
+
+    QString copyError;
+    if ( !copyDirectoryRecursively(sourceAbsolutePath, destinationAbsolutePath, &copyError) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("rename failed and fallback copy failed: %1").arg(copyError);
+        }
+        return false;
+    }
+
+    QDir sourceDir(sourceAbsolutePath);
+    if ( !sourceDir.removeRecursively() )
+    {
+        QDir(destinationAbsolutePath).removeRecursively();
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("fallback copy succeeded but failed to remove source directory");
+        }
+        return false;
+    }
+
+    return true;
+}
 }
 
 bool FileWriteAccess::write(
@@ -636,10 +738,14 @@ bool FileWriteAccess::write(
         );
 
         bool moved = false;
+        QString moveError;
         if ( sourceIsDirectory )
         {
-            QDir rootDir;
-            moved = rootDir.rename(sourceAbsolutePath, destinationAbsolutePath);
+            moved = moveDirectoryWithFallback(
+                sourceAbsolutePath,
+                destinationAbsolutePath,
+                &moveError
+            );
         }
         else
         {
@@ -665,7 +771,9 @@ bool FileWriteAccess::write(
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("file.write move failed");
+                *error = moveError.isEmpty()
+                    ? QStringLiteral("file.write move failed")
+                    : QStringLiteral("file.write move failed: %1").arg(moveError);
             }
             return false;
         }
