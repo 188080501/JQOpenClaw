@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/qml">
         <file>ConfigPane.qml</file>
+        <file>HistoryPane.qml</file>
         <file>InfoPane.qml</file>
         <file>PermissionPane.qml</file>
         <file>SoftwarePane.qml</file>

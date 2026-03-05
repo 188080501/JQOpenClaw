@@ -31,6 +31,7 @@
 #include <QTimer>
 #include <QUuid>
 #include <QUrl>
+#include <QVariantMap>
 #include <QWindow>
 
 // JQOpenClaw import
@@ -55,6 +56,7 @@ namespace
 constexpr int kPairingReconnectIntervalMs = 15000;
 constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
 constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
+constexpr int kInvokeHistoryMaxEntries = 10;
 constexpr int kScreenshotUploadTimeoutMs = 30000;
 // Internal-only delay before process exit after self-update response is sent.
 constexpr int kSelfUpdateExitDelayMs = 200;
@@ -1452,15 +1454,41 @@ void NodeApplication::onConnectRejected(const QJsonObject &error)
     startPairingReconnect();
 }
 
+void NodeApplication::appendInvokeHistoryEntry(
+    const QString &invokeTime,
+    const QString &capability
+)
+{
+    QVariantList nextHistory = invokeHistory_;
+    QVariantMap historyEntry;
+    historyEntry.insert(
+        QStringLiteral("time"),
+        invokeTime.trimmed().isEmpty()
+            ? QStringLiteral("未知时间")
+            : invokeTime.trimmed()
+    );
+    historyEntry.insert(
+        QStringLiteral("capability"),
+        capability.trimmed().isEmpty()
+            ? QStringLiteral("未知能力")
+            : capability.trimmed()
+    );
+    nextHistory.prepend(historyEntry);
+    while ( nextHistory.size() > kInvokeHistoryMaxEntries )
+    {
+        nextHistory.removeLast();
+    }
+    setInvokeHistory(nextHistory);
+}
+
 void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 {
     const QString invokeId = extractString(payload, QStringLiteral("id"));
     const QString nodeId = extractString(payload, QStringLiteral("nodeId"));
     const QString command = extractString(payload, QStringLiteral("command"));
-    setLastInvokeTime(
-        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))
-    );
-    setLastInvokeCapability(command);
+    const QString invokeTime = QDateTime::currentDateTime()
+        .toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    appendInvokeHistoryEntry(invokeTime, command);
     const QString idempotencyKey = extractString(payload, QStringLiteral("idempotencyKey"));
     const QJsonValue paramsJsonValue = payload.value(QStringLiteral("paramsJSON"));
     const QString paramsJson = paramsJsonValue.isString()

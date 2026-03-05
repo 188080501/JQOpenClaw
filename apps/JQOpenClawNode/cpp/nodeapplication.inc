@@ -12,14 +12,10 @@ inline void NodeApplication::setConnectionState(const ConnectionState &newValue)
 inline QString NodeApplication::connectionStateText() const
 { return connectionStateText_; }
 
-inline QString NodeApplication::lastInvokeTime() const
-{ return lastInvokeTime_; }
-inline void NodeApplication::setLastInvokeTime(const QString &newValue)
-{ if ( newValue == lastInvokeTime_ ) { return; } lastInvokeTime_ = newValue; emit lastInvokeTimeChanged( lastInvokeTime_ ); }
-inline QString NodeApplication::lastInvokeCapability() const
-{ return lastInvokeCapability_; }
-inline void NodeApplication::setLastInvokeCapability(const QString &newValue)
-{ if ( newValue == lastInvokeCapability_ ) { return; } lastInvokeCapability_ = newValue; emit lastInvokeCapabilityChanged( lastInvokeCapability_ ); }
+inline QVariantList NodeApplication::invokeHistory() const
+{ return invokeHistory_; }
+inline void NodeApplication::setInvokeHistory(const QVariantList &newValue)
+{ if ( newValue == invokeHistory_ ) { return; } invokeHistory_ = newValue; emit invokeHistoryChanged( invokeHistory_ ); }
 
 inline QJsonObject NodeApplication::config() const
 { return config_; }

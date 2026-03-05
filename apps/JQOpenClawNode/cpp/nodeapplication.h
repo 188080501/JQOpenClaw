@@ -12,6 +12,7 @@
 #include <QStringList>
 #include <QSystemTrayIcon>
 #include <QTimer>
+#include <QVariantList>
 
 // JQOpenClaw import
 #include "crypto/deviceidentity/deviceidentity.h"
@@ -28,8 +29,7 @@ class NodeApplication : public QObject
     Q_PROPERTY( ConnectionState connectionState READ connectionState WRITE setConnectionState NOTIFY connectionStateChanged )
     Q_PROPERTY( QString connectionStateText READ connectionStateText NOTIFY connectionStateTextChanged )
     Q_PROPERTY( QString startupTime READ startupTime CONSTANT )
-    Q_PROPERTY( QString lastInvokeTime READ lastInvokeTime NOTIFY lastInvokeTimeChanged )
-    Q_PROPERTY( QString lastInvokeCapability READ lastInvokeCapability NOTIFY lastInvokeCapabilityChanged )
+    Q_PROPERTY( QVariantList invokeHistory READ invokeHistory NOTIFY invokeHistoryChanged )
     Q_PROPERTY( QJsonObject config READ config WRITE setConfig NOTIFY configChanged )
 
 public:
@@ -113,6 +113,10 @@ private:
         const QString &key,
         const QString &defaultValue = QString()
     ) const;
+    void appendInvokeHistoryEntry(
+        const QString &invokeTime,
+        const QString &capability
+    );
 
     struct InvokeReplayTarget
     {
@@ -158,14 +162,10 @@ private: QString connectionStateText_ = QStringLiteral("未连接");
 public: inline QString connectionStateText() const;
     Q_SIGNAL void connectionStateTextChanged(const QString connectionStateText);
 
-private: QString lastInvokeTime_ = QStringLiteral("无");
-public: inline QString lastInvokeTime() const;
-public: inline void setLastInvokeTime(const QString &newValue);
-    Q_SIGNAL void lastInvokeTimeChanged(const QString lastInvokeTime);
-private: QString lastInvokeCapability_ = QString();
-public: inline QString lastInvokeCapability() const;
-public: inline void setLastInvokeCapability(const QString &newValue);
-    Q_SIGNAL void lastInvokeCapabilityChanged(const QString lastInvokeCapability);
+private: QVariantList invokeHistory_ = QVariantList();
+public: inline QVariantList invokeHistory() const;
+public: inline void setInvokeHistory(const QVariantList &newValue);
+    Q_SIGNAL void invokeHistoryChanged(const QVariantList invokeHistory);
 
 private: QJsonObject config_;
 public: inline QJsonObject config() const;

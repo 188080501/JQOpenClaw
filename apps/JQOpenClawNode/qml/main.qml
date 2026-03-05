@@ -56,6 +56,10 @@ JQWindow {
             SoftwarePane {
                 width: parent.width
             }
+
+            HistoryPane {
+                width: parent.width
+            }
         }
     }
 }

@@ -44,14 +44,6 @@ JQPane {
             color: "#1f2937"
         }
 
-        Text {
-            text: qsTr("最后调用: %1  %2")
-                .arg(nodeApplication.lastInvokeTime)
-                .arg(nodeApplication.lastInvokeCapability)
-            font.pixelSize: 14
-            color: "#1f2937"
-        }
-
         Row {
             spacing: 16
 
