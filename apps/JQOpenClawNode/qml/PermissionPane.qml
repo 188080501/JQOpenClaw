@@ -112,7 +112,7 @@ JQPane {
             id: fileRead
             titleText: qsTr("file.read")
             titleWidth: 170
-            tipText: qsTr("支持 operation=read/lines/list/rg/stat：文件读取、按行读取、目录遍历与元信息查询。")
+            tipText: qsTr("支持 operation=read/lines/list/rg/stat/md5：文件读取、按行读取、目录遍历、元信息查询与文件 MD5 计算。")
         }
 
         JQSettingsCheckBox {

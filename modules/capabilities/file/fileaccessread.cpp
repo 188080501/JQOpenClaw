@@ -3,6 +3,7 @@
 
 // Qt lib import
 #include <QByteArray>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
@@ -240,6 +241,7 @@ enum class FileReadOperation
     List,
     Rg,
     Stat,
+    Md5,
 };
 
 QString extractString(const QJsonObject &object, const QString &key)
@@ -255,6 +257,52 @@ QString normalizeToken(const QString &value)
     normalized.remove('_');
     normalized.remove(' ');
     return normalized;
+}
+
+bool calculateFileMd5Hex(
+    const QString &path,
+    QString *md5Hex,
+    QString *error
+)
+{
+    if ( md5Hex == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file.read md5 output pointer is null");
+        }
+        return false;
+    }
+
+    QFile file(path);
+    if ( !file.open(QIODevice::ReadOnly) )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("file.read open failed: %1")
+                .arg(file.errorString().trimmed());
+        }
+        return false;
+    }
+
+    QCryptographicHash md5(QCryptographicHash::Md5);
+    while ( !file.atEnd() )
+    {
+        const QByteArray block = file.read(64 * 1024);
+        if ( block.isEmpty() && ( file.error() != QFile::NoError ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.read read failed: %1")
+                    .arg(file.errorString().trimmed());
+            }
+            return false;
+        }
+        md5.addData(block);
+    }
+
+    *md5Hex = QString::fromLatin1(md5.result().toHex()).toLower();
+    return true;
 }
 
 bool parseEncoding(
@@ -320,6 +368,8 @@ QString fileReadOperationName(FileReadOperation operation)
         return QStringLiteral("rg");
     case FileReadOperation::Stat:
         return QStringLiteral("stat");
+    case FileReadOperation::Md5:
+        return QStringLiteral("md5");
     }
     return QStringLiteral("read");
 }
@@ -390,10 +440,15 @@ bool parseReadOperation(
         *operation = FileReadOperation::Stat;
         return true;
     }
+    if ( normalized == QStringLiteral("md5") )
+    {
+        *operation = FileReadOperation::Md5;
+        return true;
+    }
 
     if ( error != nullptr )
     {
-        *error = QStringLiteral("operation must be read, lines, list, rg, or stat");
+        *error = QStringLiteral("operation must be read, lines, list, rg, stat, or md5");
     }
     return false;
 }
@@ -1418,6 +1473,41 @@ bool FileReadAccess::read(
     if ( operation == FileReadOperation::Stat )
     {
         *result = buildStatOutput(fileInfo, operation);
+        return true;
+    }
+
+    if ( operation == FileReadOperation::Md5 )
+    {
+        if ( !fileInfo.isFile() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("file.read md5 target is not a file");
+            }
+            return false;
+        }
+
+        QString md5Hex;
+        QString md5Error;
+        if ( !calculateFileMd5Hex(fileInfo.absoluteFilePath(), &md5Hex, &md5Error) )
+        {
+            if ( error != nullptr )
+            {
+                *error = md5Error.isEmpty()
+                    ? QStringLiteral("file.read md5 failed")
+                    : md5Error;
+            }
+            return false;
+        }
+
+        QJsonObject out;
+        out.insert(QStringLiteral("path"), fileInfo.absoluteFilePath());
+        out.insert(QStringLiteral("operation"), fileReadOperationName(operation));
+        out.insert(QStringLiteral("targetType"), QStringLiteral("file"));
+        out.insert(QStringLiteral("algorithm"), QStringLiteral("md5"));
+        out.insert(QStringLiteral("sizeBytes"), fileInfo.size());
+        out.insert(QStringLiteral("md5"), md5Hex);
+        *result = out;
         return true;
     }
 

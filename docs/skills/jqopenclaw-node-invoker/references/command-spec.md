@@ -30,11 +30,11 @@
 
 ## 2. file.read
 
-用途：读取文件内容、按行区间、目录遍历、元信息，或执行 `rg` 搜索。
+用途：读取文件内容、按行区间、目录遍历、元信息、计算文件 MD5，或执行 `rg` 搜索。
 
 `params`：
 - `path`：字符串，必填。
-- `operation`：字符串，可选，默认 `read`。可选值：`read` / `lines` / `list` / `rg` / `stat`。
+- `operation`：字符串，可选，默认 `read`。可选值：`read` / `lines` / `list` / `rg` / `stat` / `md5`。
 - `read` 模式参数：
   - `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
   - `maxBytes`：整数，可选，默认 `1048576`，范围 `[1, 20971520]`。
@@ -58,6 +58,8 @@
   - `literal`：布尔，可选，默认 `false`（固定字符串匹配）。
   - 内部执行超时：默认 `60000ms`，若设置了 `node.invoke.timeoutMs`（含 `0`），实际超时为二者较小值。
 - `stat` 模式参数：
+  - 无额外必填参数。
+- `md5` 模式参数：
   - 无额外必填参数。
 
 示例：
@@ -162,6 +164,24 @@
 }
 ```
 
+示例（md5 模式）：
+
+```json
+{
+  "method": "node.invoke",
+  "params": {
+    "nodeId": "<node-id>",
+    "command": "file.read",
+    "params": {
+      "operation": "md5",
+      "path": "C:/Temp/app.log"
+    },
+    "timeoutMs": 15000,
+    "idempotencyKey": "<uuid>"
+  }
+}
+```
+
 返回重点（payload）：
 - 公共字段：
   - `path`
@@ -219,6 +239,10 @@
   - `owner`（`name`、`id`、`group`、`groupId`）
   - `permissions`（owner/group/other 的 read/write/execute）
   - `timestamps`（`accessTime`、`birthTime`、`modificationTime`、`metadataChangeTime`，各含 `iso8601`、`epochMs`）
+- `md5` 模式字段：
+  - `algorithm`：固定 `md5`
+  - `sizeBytes`
+  - `md5`（32 位小写十六进制摘要）
 
 ## 3. file.write
 
