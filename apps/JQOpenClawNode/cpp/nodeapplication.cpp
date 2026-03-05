@@ -566,10 +566,10 @@ bool NodeApplication::saveConfig()
     {
         normalizedConfig.insert(QStringLiteral("displayName"), generateDefaultDisplayName());
     }
-    if ( normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed().isEmpty() )
+    if ( normalizedConfig.value(QStringLiteral("instanceId")).toString().trimmed().isEmpty() )
     {
         normalizedConfig.insert(
-            QStringLiteral("nodeId"),
+            QStringLiteral("instanceId"),
             QUuid::createUuid().toString(QUuid::WithoutBraces)
         );
     }
@@ -687,7 +687,7 @@ QJsonObject NodeApplication::defaultConfig()
     config.insert(QStringLiteral("followSystemStartup"), false);
     config.insert(QStringLiteral("silentStartup"), false);
     config.insert(QStringLiteral("displayName"), QString());
-    config.insert(QStringLiteral("nodeId"), QString());
+    config.insert(QStringLiteral("instanceId"), QString());
     config.insert(QStringLiteral("identityPath"), defaultIdentityPath());
     config.insert(QStringLiteral("fileServerUrl"), QString());
     config.insert(QStringLiteral("fileServerToken"), QString());
@@ -736,10 +736,10 @@ QJsonObject NodeApplication::normalizeConfig(const QJsonObject &config)
         normalized.insert(QStringLiteral("displayName"), displayName.toString().trimmed());
     }
 
-    const QJsonValue nodeId = config.value(QStringLiteral("nodeId"));
-    if ( nodeId.isString() )
+    const QJsonValue instanceId = config.value(QStringLiteral("instanceId"));
+    if ( instanceId.isString() )
     {
-        normalized.insert(QStringLiteral("nodeId"), nodeId.toString().trimmed());
+        normalized.insert(QStringLiteral("instanceId"), instanceId.toString().trimmed());
     }
 
     const QJsonValue identityPath = config.value(QStringLiteral("identityPath"));
@@ -904,7 +904,7 @@ bool NodeApplication::loadConfigFromDisk(QString *error)
         QJsonObject defaults = defaultConfig();
         defaults.insert(QStringLiteral("displayName"), generateDefaultDisplayName());
         defaults.insert(
-            QStringLiteral("nodeId"),
+            QStringLiteral("instanceId"),
             QUuid::createUuid().toString(QUuid::WithoutBraces)
         );
         if ( !saveConfigToDisk(defaults, error) )
@@ -947,10 +947,10 @@ bool NodeApplication::loadConfigFromDisk(QString *error)
         normalizedConfig.insert(QStringLiteral("displayName"), generateDefaultDisplayName());
         configChanged = true;
     }
-    if ( normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed().isEmpty() )
+    if ( normalizedConfig.value(QStringLiteral("instanceId")).toString().trimmed().isEmpty() )
     {
         normalizedConfig.insert(
-            QStringLiteral("nodeId"),
+            QStringLiteral("instanceId"),
             QUuid::createUuid().toString(QUuid::WithoutBraces)
         );
         configChanged = true;
@@ -961,11 +961,10 @@ bool NodeApplication::loadConfigFromDisk(QString *error)
         QString saveError;
         if ( !saveConfigToDisk(normalizedConfig, &saveError) )
         {
-            if ( error != nullptr )
-            {
-                *error = saveError;
-            }
-            return false;
+            // Keep runtime usable even if persisting normalized config fails.
+            qWarning().noquote() << QStringLiteral(
+                "failed to persist normalized config, continue with in-memory config: %1"
+            ).arg(saveError);
         }
     }
 
@@ -1025,7 +1024,17 @@ bool NodeApplication::saveConfigToDisk(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("failed to commit config file: %1").arg(configPath_);
+            const QString commitError = configFile.errorString().trimmed();
+            if ( commitError.isEmpty() )
+            {
+                *error = QStringLiteral("failed to commit config file: %1").arg(configPath_);
+            }
+            else
+            {
+                *error = QStringLiteral(
+                    "failed to commit config file: %1 (%2)"
+                ).arg(configPath_, commitError);
+            }
         }
         return false;
     }
@@ -1042,7 +1051,7 @@ NodeOptions NodeApplication::buildNodeOptions(QString *error) const
     options.token = normalizedConfig.value(QStringLiteral("token")).toString();
     options.tls = false;
     options.displayName = normalizedConfig.value(QStringLiteral("displayName")).toString().trimmed();
-    options.nodeId = normalizedConfig.value(QStringLiteral("nodeId")).toString().trimmed();
+    options.instanceId = normalizedConfig.value(QStringLiteral("instanceId")).toString().trimmed();
     options.configPath = configPath_;
     options.identityPath = normalizedConfig.value(QStringLiteral("identityPath")).toString().trimmed();
     options.fileServerUrl = normalizedConfig.value(QStringLiteral("fileServerUrl")).toString().trimmed();
@@ -1385,10 +1394,10 @@ void NodeApplication::start()
 
     qInfo().noquote() << QStringLiteral("device identity: %1").arg(identity_.deviceId);
     qInfo().noquote() << QStringLiteral("identity file: %1").arg(store.identityPath());
-    const QString configuredNodeId = options.nodeId.trimmed();
-    if ( !configuredNodeId.isEmpty() )
+    const QString configuredInstanceId = options.instanceId.trimmed();
+    if ( !configuredInstanceId.isEmpty() )
     {
-        qInfo().noquote() << QStringLiteral("node instance id: %1").arg(configuredNodeId);
+        qInfo().noquote() << QStringLiteral("node instance id: %1").arg(configuredInstanceId);
     }
 
     gatewayClient_.setOptions(options);

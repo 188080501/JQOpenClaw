@@ -96,9 +96,9 @@ bool NodeRegistrar::buildConnectParams(
     {
         clientObject.insert("displayName", options_.displayName.trimmed());
     }
-    if ( !options_.nodeId.trimmed().isEmpty() )
+    if ( !options_.instanceId.trimmed().isEmpty() )
     {
-        clientObject.insert("instanceId", options_.nodeId.trimmed());
+        clientObject.insert("instanceId", options_.instanceId.trimmed());
     }
 
     QJsonObject connectParams;

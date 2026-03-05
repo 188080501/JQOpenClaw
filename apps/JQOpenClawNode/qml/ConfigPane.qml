@@ -33,7 +33,7 @@ JQPane {
         gatewayUrl.text = readString( configObject, "gatewayUrl", "ws://127.0.0.1:18789" );
         gatewayToken.text = readString( configObject, "token", "" );
         displayName.text = readString( configObject, "displayName", "" );
-        nodeId.text = readString( configObject, "nodeId", "" );
+        instanceId.text = readString( configObject, "instanceId", "" );
         identityPath.text = readString( configObject, "identityPath", "" );
         fileServerUrl.text = readString( configObject, "fileServerUrl", "" );
         fileServerToken.text = readString( configObject, "fileServerToken", "" );
@@ -106,7 +106,7 @@ JQPane {
             }
 
             JQSettingsTextField {
-                id: nodeId
+                id: instanceId
                 titleText: qsTr("实例ID")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24

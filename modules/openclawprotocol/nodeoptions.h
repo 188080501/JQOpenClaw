@@ -11,7 +11,7 @@ struct NodeOptions
     QString token;
     bool tls = false;
     QString displayName;
-    QString nodeId;
+    QString instanceId;
     QString configPath;
     QString identityPath;
     QString fileServerUrl;
