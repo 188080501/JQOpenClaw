@@ -240,6 +240,7 @@ bool parseExecuteRequest(
     QString *workingDirectory,
     QByteArray *stdinBytes,
     int *timeoutMs,
+    bool *detached,
     bool *mergeChannels,
     QProcessEnvironment *environment,
     QString *error
@@ -250,6 +251,7 @@ bool parseExecuteRequest(
          ( workingDirectory == nullptr ) ||
          ( stdinBytes == nullptr ) ||
          ( timeoutMs == nullptr ) ||
+         ( detached == nullptr ) ||
          ( mergeChannels == nullptr ) ||
          ( environment == nullptr ) )
     {
@@ -327,14 +329,53 @@ bool parseExecuteRequest(
     {
         return false;
     }
+    if ( !parseOptionalBool(
+            paramsObject,
+            QStringLiteral("detached"),
+            false,
+            detached,
+            error
+        ) )
+    {
+        return false;
+    }
 
-    return parseOptionalBool(
-        paramsObject,
-        QStringLiteral("mergeChannels"),
-        false,
-        mergeChannels,
-        error
-    );
+    if ( !parseOptionalBool(
+            paramsObject,
+            QStringLiteral("mergeChannels"),
+            false,
+            mergeChannels,
+            error
+        ) )
+    {
+        return false;
+    }
+
+    if ( *detached )
+    {
+        if ( *mergeChannels )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "process.exec mergeChannels is not supported when detached is true"
+                );
+            }
+            return false;
+        }
+        if ( !stdinBytes->isEmpty() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "process.exec stdin is not supported when detached is true"
+                );
+            }
+            return false;
+        }
+    }
+
+    return true;
 }
 
 QJsonArray toJsonArray(const QStringList &items)
@@ -426,6 +467,7 @@ bool ProcessExec::execute(
     QString workingDirectory;
     QByteArray stdinBytes;
     int timeoutMs = processDefaultTimeoutMs;
+    bool detached = false;
     bool mergeChannels = false;
     QProcessEnvironment environment;
     QString parseError;
@@ -436,6 +478,7 @@ bool ProcessExec::execute(
             &workingDirectory,
             &stdinBytes,
             &timeoutMs,
+            &detached,
             &mergeChannels,
             &environment,
             &parseError
@@ -452,19 +495,82 @@ bool ProcessExec::execute(
         return false;
     }
 
-    if ( invokeTimeoutMs >= 0 )
+    if ( ( !detached ) && ( invokeTimeoutMs >= 0 ) )
     {
         timeoutMs = qMin(timeoutMs, invokeTimeoutMs);
     }
 
     qInfo().noquote() << QStringLiteral(
-        "[capability.process.exec] start program=%1 args=%2 timeoutMs=%3 workingDirectory=%4"
+        "[capability.process.exec] start program=%1 args=%2 timeoutMs=%3 detached=%4 workingDirectory=%5"
     ).arg(
         program,
         arguments.join(' '),
         QString::number(timeoutMs),
+        detached ? QStringLiteral("true") : QStringLiteral("false"),
         workingDirectory
     );
+
+    if ( detached )
+    {
+        QElapsedTimer timer;
+        timer.start();
+
+        QProcess process;
+        process.setProcessEnvironment(environment);
+        if ( !workingDirectory.isEmpty() )
+        {
+            process.setWorkingDirectory(workingDirectory);
+        }
+        process.setProgram(program);
+        process.setArguments(arguments);
+
+        qint64 detachedPid = 0;
+        const bool detachedStarted = process.startDetached(&detachedPid);
+        if ( !detachedStarted )
+        {
+            const QString startError = process.errorString().trimmed();
+            if ( error != nullptr )
+            {
+                *error = startError.isEmpty()
+                    ? QStringLiteral("process.exec failed to start detached process")
+                    : QStringLiteral("process.exec failed to start detached process: %1")
+                          .arg(startError);
+            }
+            qWarning().noquote() << QStringLiteral(
+                "[capability.process.exec] failed to start detached program=%1 error=%2"
+            ).arg(program, startError);
+            return false;
+        }
+
+        QJsonObject out;
+        out.insert(QStringLiteral("program"), program);
+        out.insert(QStringLiteral("arguments"), toJsonArray(arguments));
+        out.insert(QStringLiteral("workingDirectory"), workingDirectory);
+        out.insert(QStringLiteral("timeoutMs"), timeoutMs);
+        out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
+        out.insert(QStringLiteral("detached"), true);
+        if ( detachedPid > 0 )
+        {
+            out.insert(QStringLiteral("pid"), static_cast<double>(detachedPid));
+        }
+        out.insert(QStringLiteral("timedOut"), false);
+        out.insert(QStringLiteral("exitCode"), -1);
+        out.insert(QStringLiteral("exitStatus"), QStringLiteral("detached"));
+        out.insert(QStringLiteral("stdout"), QString());
+        out.insert(QStringLiteral("stderr"), QString());
+        out.insert(QStringLiteral("ok"), true);
+        out.insert(QStringLiteral("resultClass"), QStringLiteral("detached"));
+
+        *result = out;
+        qInfo().noquote() << QStringLiteral(
+            "[capability.process.exec] detached program=%1 pid=%2 elapsedMs=%3"
+        ).arg(
+            program,
+            detachedPid > 0 ? QString::number(detachedPid) : QStringLiteral("unknown"),
+            QString::number(timer.elapsed())
+        );
+        return true;
+    }
 
     QProcess process;
     process.setProcessEnvironment(environment);
@@ -524,6 +630,7 @@ bool ProcessExec::execute(
     out.insert(QStringLiteral("workingDirectory"), workingDirectory);
     out.insert(QStringLiteral("timeoutMs"), timeoutMs);
     out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
+    out.insert(QStringLiteral("detached"), false);
     out.insert(QStringLiteral("timedOut"), timedOut);
     out.insert(QStringLiteral("exitCode"), exitCode);
     out.insert(
