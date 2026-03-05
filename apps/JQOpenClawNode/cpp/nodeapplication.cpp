@@ -50,12 +50,6 @@
 #include "openclawprotocol/noderegistrar.h"
 #include "openclawprotocol/nodeprofile.h"
 
-#if defined(Q_OS_WIN)
-#include <windows.h>
-#else
-#include <cstdlib>
-#endif
-
 namespace
 {
 constexpr int kPairingReconnectIntervalMs = 15000;
@@ -468,14 +462,6 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
     return true;
 }
 
-void exitCurrentProcessViaCApi()
-{
-#if defined(Q_OS_WIN)
-    ::ExitProcess(0);
-#else
-    std::exit(0);
-#endif
-}
 }
 
 NodeApplication::NodeApplication(
@@ -532,6 +518,15 @@ NodeApplication::NodeApplication(
         this,
         &NodeApplication::onPairingReconnectTimeout
     );
+    if ( QCoreApplication::instance() != nullptr )
+    {
+        connect(
+            QCoreApplication::instance(),
+            &QCoreApplication::aboutToQuit,
+            this,
+            &NodeApplication::hideTrayIconIfNeeded
+        );
+    }
 
     setConfig(defaultConfig());
     QString loadConfigError;
@@ -1170,6 +1165,25 @@ void NodeApplication::initializeSystemTray()
     trayIcon_->show();
 }
 
+void NodeApplication::hideTrayIconIfNeeded()
+{
+    if ( trayIcon_ == nullptr )
+    {
+        return;
+    }
+
+    if ( trayIcon_->isVisible() )
+    {
+        trayIcon_->hide();
+    }
+}
+
+void NodeApplication::requestApplicationExit(int code)
+{
+    hideTrayIconIfNeeded();
+    QCoreApplication::exit(code);
+}
+
 void NodeApplication::showMainWindow()
 {
     if ( mainWindowObject_.isNull() )
@@ -1301,7 +1315,7 @@ void NodeApplication::onExitActionTriggered()
         return;
     }
 
-    QCoreApplication::exit(0);
+    requestApplicationExit(0);
 }
 
 void NodeApplication::start()
@@ -1766,9 +1780,9 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
             QTimer::singleShot(
                 kSelfUpdateExitDelayMs,
                 this,
-                []()
+                [this]()
                 {
-                    exitCurrentProcessViaCApi();
+                    requestApplicationExit(0);
                 }
             );
         }

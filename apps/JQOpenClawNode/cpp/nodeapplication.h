@@ -56,6 +56,8 @@ public:
 
 private:
     void initializeSystemTray();
+    void hideTrayIconIfNeeded();
+    void requestApplicationExit(int code);
     void showMainWindow();
     void updateConnectionStatusAction();
     QString connectionStateDisplayText() const;

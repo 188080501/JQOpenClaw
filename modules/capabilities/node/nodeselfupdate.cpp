@@ -1,4 +1,4 @@
-// .h include
+﻿// .h include
 #include "capabilities/node/nodeselfupdate.h"
 
 // Qt lib import
@@ -19,9 +19,6 @@
 namespace
 {
 const int selfUpdateDownloadTimeoutMs = 5 * 60 * 1000;
-// Internal-only self-exit delay contract. Do not expose to gateway payload.
-const int selfUpdateExitDelayMs = 200;
-static_assert(selfUpdateExitDelayMs == 200, "internal self-update exit delay");
 
 QString extractString(const QJsonObject &object, const QString &key)
 {
@@ -99,13 +96,6 @@ bool isValidMd5Hex(const QString &value)
         }
     }
     return true;
-}
-
-QString batEscapeValue(const QString &value)
-{
-    QString escaped = value;
-    escaped.replace(QLatin1Char('"'), QStringLiteral("\"\""));
-    return escaped;
 }
 
 bool writeBytesToFile(
@@ -266,56 +256,29 @@ QString buildSelfUpdateBatchContent(
     const QString &targetFilePath
 )
 {
-    QString script;
-    script += QStringLiteral("@echo off\r\n");
-    script += QStringLiteral("setlocal enableextensions enabledelayedexpansion\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("set \"SOURCE_FILE=%1\"\r\n").arg(batEscapeValue(sourceFilePath));
-    script += QStringLiteral("set \"TARGET_FILE=%1\"\r\n").arg(batEscapeValue(targetFilePath));
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("set \"WAIT_BEFORE_COPY_SEC=3\"\r\n");
-    script += QStringLiteral("set \"MAX_RETRY=30\"\r\n");
-    script += QStringLiteral("set \"RETRY_INTERVAL_SEC=1\"\r\n");
-    script += QStringLiteral("set \"START_ARGS=\"\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("if not exist \"%SOURCE_FILE%\" (\r\n");
-    script += QStringLiteral("    echo [ERROR] Source file not found: \"%SOURCE_FILE%\"\r\n");
-    script += QStringLiteral("    set \"EXIT_CODE=2\"\r\n");
-    script += QStringLiteral("    goto cleanup\r\n");
-    script += QStringLiteral(")\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("echo [INFO] Waiting %WAIT_BEFORE_COPY_SEC%s before replace...\r\n");
-    script += QStringLiteral("timeout /t %WAIT_BEFORE_COPY_SEC% /nobreak >nul\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("for /l %%i in (1,1,%MAX_RETRY%) do (\r\n");
-    script += QStringLiteral("    copy /y \"%SOURCE_FILE%\" \"%TARGET_FILE%\" >nul 2>nul\r\n");
-    script += QStringLiteral("    if not errorlevel 1 goto success\r\n");
-    script += QStringLiteral("    echo [WARN] Replace failed, retry %%i/%MAX_RETRY%...\r\n");
-    script += QStringLiteral("    timeout /t %RETRY_INTERVAL_SEC% /nobreak >nul\r\n");
-    script += QStringLiteral(")\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("echo [ERROR] Replace failed after %MAX_RETRY% retries.\r\n");
-    script += QStringLiteral("set \"EXIT_CODE=1\"\r\n");
-    script += QStringLiteral("goto cleanup\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral(":success\r\n");
-    script += QStringLiteral("echo [INFO] Replace success.\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("if not exist \"%TARGET_FILE%\" (\r\n");
-    script += QStringLiteral("    echo [ERROR] Target file missing after replace: \"%TARGET_FILE%\"\r\n");
-    script += QStringLiteral("    set \"EXIT_CODE=3\"\r\n");
-    script += QStringLiteral("    goto cleanup\r\n");
-    script += QStringLiteral(")\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral("echo [INFO] Starting: \"%TARGET_FILE%\" %START_ARGS%\r\n");
-    script += QStringLiteral("start \"\" \"%TARGET_FILE%\" %START_ARGS%\r\n");
-    script += QStringLiteral("set \"EXIT_CODE=0\"\r\n");
-    script += QStringLiteral("\r\n");
-    script += QStringLiteral(":cleanup\r\n");
-    script += QStringLiteral("del /f /q \"%SOURCE_FILE%\" >nul 2>nul\r\n");
-    script += QStringLiteral("start \"\" cmd /c del /f /q \"%~f0\"\r\n");
-    script += QStringLiteral("exit /b %EXIT_CODE%\r\n");
-    return script;
+    QStringList scriptLines{
+        "@echo off",
+        "setlocal enableextensions enabledelayedexpansion",
+        QString("set \"source=%1\"").arg(QDir::toNativeSeparators(sourceFilePath)),
+        QString("set \"target=%1\"").arg(QDir::toNativeSeparators(targetFilePath)),
+        "set \"script=%~f0\"",
+        "for /l %%i in (1,1,30) do (",
+        "    copy /y \"%source%\" \"%target%\" >nul 2>nul",
+        "    if not errorlevel 1 goto success",
+        "    ping 127.0.0.1 -n 2 >nul",
+        ")",
+        "exit /b 1",
+        ":success"
+    };
+
+    scriptLines.append(QString("\"%1\"").arg(QDir::toNativeSeparators(targetFilePath)));
+    scriptLines.append("del \"%source%\" >nul 2>nul");
+    scriptLines.append("del \"%script%\" >nul 2>nul");
+    scriptLines.append("exit /b 0");
+
+    QString scriptContent = scriptLines.join("\r\n");
+    scriptContent.append("\r\n");
+    return scriptContent;
 }
 }
 
