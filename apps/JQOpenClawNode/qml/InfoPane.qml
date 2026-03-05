@@ -39,6 +39,12 @@ JQPane {
         }
 
         Text {
+            text: qsTr("启动时间: %1").arg(nodeApplication.startupTime)
+            font.pixelSize: 14
+            color: "#1f2937"
+        }
+
+        Text {
             text: qsTr("最后调用: %1  %2")
                 .arg(nodeApplication.lastInvokeTime)
                 .arg(nodeApplication.lastInvokeCapability)

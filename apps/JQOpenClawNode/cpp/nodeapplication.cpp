@@ -473,6 +473,8 @@ NodeApplication::NodeApplication(
     mainWindowObject_(mainWindowObject),
     pairingReconnectTimer_(this)
 {
+    startupTime_ = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+
     pairingReconnectTimer_.setInterval(kPairingReconnectIntervalMs);
     pairingReconnectTimer_.setSingleShot(false);
 
@@ -550,6 +552,11 @@ NodeApplication::NodeApplication(
 void NodeApplication::setMainWindowObject(QObject *mainWindowObject)
 {
     mainWindowObject_ = mainWindowObject;
+}
+
+QString NodeApplication::startupTime() const
+{
+    return startupTime_;
 }
 
 bool NodeApplication::saveConfig()

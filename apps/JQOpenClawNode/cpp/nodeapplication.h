@@ -27,6 +27,7 @@ class NodeApplication : public QObject
 
     Q_PROPERTY( ConnectionState connectionState READ connectionState WRITE setConnectionState NOTIFY connectionStateChanged )
     Q_PROPERTY( QString connectionStateText READ connectionStateText NOTIFY connectionStateTextChanged )
+    Q_PROPERTY( QString startupTime READ startupTime CONSTANT )
     Q_PROPERTY( QString lastInvokeTime READ lastInvokeTime NOTIFY lastInvokeTimeChanged )
     Q_PROPERTY( QString lastInvokeCapability READ lastInvokeCapability NOTIFY lastInvokeCapabilityChanged )
     Q_PROPERTY( QJsonObject config READ config WRITE setConfig NOTIFY configChanged )
@@ -51,6 +52,7 @@ public:
     Q_INVOKABLE bool setFollowSystemStartup(bool enabled);
     Q_INVOKABLE bool setSilentStartup(bool enabled);
     bool silentStartupEnabled() const;
+    QString startupTime() const;
     void setMainWindowObject(QObject *mainWindowObject);
     void start();
 
@@ -138,6 +140,7 @@ private:
     QAction *mainWindowAction_ = nullptr;
     QAction *exitAction_ = nullptr;
     bool registered_ = false;
+    QString startupTime_;
     QString connectionStateDetail_;
     QTimer pairingReconnectTimer_;
     QHash<QString, InvokeIdempotencyEntry> invokeIdempotencyCache_;
