@@ -133,6 +133,108 @@ QString extractString(const QJsonObject &object, const QString &key)
     return value.isString() ? value.toString().trimmed() : QString();
 }
 
+bool isJsonSimpleEscapeCharacter(const QChar ch)
+{
+    return ( ch == '"' ) ||
+        ( ch == '\\' ) ||
+        ( ch == '/' ) ||
+        ( ch == 'b' ) ||
+        ( ch == 'f' ) ||
+        ( ch == 'n' ) ||
+        ( ch == 'r' ) ||
+        ( ch == 't' );
+}
+
+bool isHexDigit(const QChar ch)
+{
+    return ( ( ch >= '0' ) && ( ch <= '9' ) ) ||
+        ( ( ch >= 'a' ) && ( ch <= 'f' ) ) ||
+        ( ( ch >= 'A' ) && ( ch <= 'F' ) );
+}
+
+QString escapeInvalidBackslashesInJsonStrings(
+    const QString &jsonText,
+    bool *changed
+)
+{
+    if ( changed != nullptr )
+    {
+        *changed = false;
+    }
+
+    QString repaired;
+    repaired.reserve(jsonText.size());
+
+    bool inString = false;
+    const int length = jsonText.size();
+    for ( int index = 0; index < length; ++index )
+    {
+        const QChar ch = jsonText.at(index);
+        if ( !inString )
+        {
+            repaired.append(ch);
+            if ( ch == '"' )
+            {
+                inString = true;
+            }
+            continue;
+        }
+
+        if ( ch == '\\' )
+        {
+            if ( index + 1 >= length )
+            {
+                repaired.append(QStringLiteral("\\\\"));
+                if ( changed != nullptr )
+                {
+                    *changed = true;
+                }
+                continue;
+            }
+
+            const QChar next = jsonText.at(index + 1);
+            if ( isJsonSimpleEscapeCharacter(next) )
+            {
+                repaired.append(ch);
+                repaired.append(next);
+                ++index;
+                continue;
+            }
+
+            if ( next == 'u' )
+            {
+                const bool hasUnicodeDigits = ( index + 5 < length ) &&
+                    isHexDigit(jsonText.at(index + 2)) &&
+                    isHexDigit(jsonText.at(index + 3)) &&
+                    isHexDigit(jsonText.at(index + 4)) &&
+                    isHexDigit(jsonText.at(index + 5));
+                if ( hasUnicodeDigits )
+                {
+                    repaired.append(ch);
+                    repaired.append(next);
+                    ++index;
+                    continue;
+                }
+            }
+
+            repaired.append(QStringLiteral("\\\\"));
+            if ( changed != nullptr )
+            {
+                *changed = true;
+            }
+            continue;
+        }
+
+        repaired.append(ch);
+        if ( ch == '"' )
+        {
+            inString = false;
+        }
+    }
+
+    return repaired;
+}
+
 bool trySerializeJsonValue(const QJsonValue &value, QString *json)
 {
     if ( json == nullptr )
@@ -2408,19 +2510,49 @@ bool NodeApplication::parseInvokeParamsJson(
         normalized.toUtf8(),
         &parseError
     );
+
+    QJsonDocument resolvedJson = json;
     if ( parseError.error != QJsonParseError::NoError )
     {
-        if ( error != nullptr )
+        bool repaired = false;
+        const QString repairedJsonText = escapeInvalidBackslashesInJsonStrings(
+            normalized,
+            &repaired
+        );
+        if ( repaired )
         {
-            *error = QStringLiteral("failed to parse paramsJSON: %1")
-                .arg(parseError.errorString());
+            QJsonParseError repairedParseError;
+            const QJsonDocument repairedJson = QJsonDocument::fromJson(
+                repairedJsonText.toUtf8(),
+                &repairedParseError
+            );
+            if ( repairedParseError.error == QJsonParseError::NoError )
+            {
+                qWarning().noquote() << QStringLiteral(
+                    "[node.invoke] paramsJSON accepted via backslash-escape compatibility fallback"
+                );
+                resolvedJson = repairedJson;
+            }
+            else
+            {
+                parseError = repairedParseError;
+            }
         }
-        return false;
+
+        if ( resolvedJson.isNull() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("failed to parse paramsJSON: %1")
+                    .arg(parseError.errorString());
+            }
+            return false;
+        }
     }
 
-    if ( json.isObject() )
+    if ( resolvedJson.isObject() )
     {
-        *params = json.object();
+        *params = resolvedJson.object();
         return true;
     }
 
