@@ -749,19 +749,43 @@ bool FileWriteAccess::write(
         }
         else
         {
-            moved = QFile::rename(sourceAbsolutePath, destinationAbsolutePath);
-            if ( !moved && sourceInfo.isFile() )
+            QFile sourceFile(sourceAbsolutePath);
+            if ( sourceFile.rename(destinationAbsolutePath) )
             {
-                if ( QFile::copy(sourceAbsolutePath, destinationAbsolutePath) )
+                moved = true;
+            }
+            else
+            {
+                const QString renameError = sourceFile.errorString().trimmed();
+                moveError = renameError.isEmpty()
+                    ? QStringLiteral("rename failed")
+                    : QStringLiteral("rename failed: %1").arg(renameError);
+
+                if ( sourceInfo.isFile() )
                 {
-                    QFile sourceFile(sourceAbsolutePath);
-                    if ( sourceFile.remove() )
+                    if ( sourceFile.copy(destinationAbsolutePath) )
                     {
-                        moved = true;
+                        if ( sourceFile.remove() )
+                        {
+                            moved = true;
+                        }
+                        else
+                        {
+                            const QString removeError = sourceFile.errorString().trimmed();
+                            moveError = removeError.isEmpty()
+                                ? QStringLiteral("fallback copy succeeded but failed to remove source file")
+                                : QStringLiteral("fallback copy succeeded but failed to remove source file: %1").arg(removeError);
+
+                            QFile destinationFile(destinationAbsolutePath);
+                            destinationFile.remove();
+                        }
                     }
                     else
                     {
-                        QFile::remove(destinationAbsolutePath);
+                        const QString copyError = sourceFile.errorString().trimmed();
+                        moveError = copyError.isEmpty()
+                            ? QStringLiteral("%1; fallback copy failed").arg(moveError)
+                            : QStringLiteral("%1; fallback copy failed: %2").arg(moveError, copyError);
                     }
                 }
             }
