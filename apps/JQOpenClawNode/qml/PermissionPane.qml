@@ -43,7 +43,7 @@ JQPane {
         fileRead.checked = readBool(permissionObject, "file.read");
         fileWrite.checked = readBool(permissionObject, "file.write");
         processManage.checked = readBool(permissionObject, "process.manage");
-        processExec.checked = readBool(permissionObject, "process.exec");
+        systemRun.checked = readBool(permissionObject, "system.run");
         processWhich.checked = readBool(permissionObject, "process.which");
         systemScreenshot.checked = readBool(permissionObject, "system.screenshot");
         systemInfo.checked = readBool(permissionObject, "system.info");
@@ -69,7 +69,7 @@ JQPane {
         permissionObject["file.read"] = fileRead.checked;
         permissionObject["file.write"] = fileWrite.checked;
         permissionObject["process.manage"] = processManage.checked;
-        permissionObject["process.exec"] = processExec.checked;
+        permissionObject["system.run"] = systemRun.checked;
         permissionObject["process.which"] = processWhich.checked;
         permissionObject["system.screenshot"] = systemScreenshot.checked;
         permissionObject["system.info"] = systemInfo.checked;
@@ -123,24 +123,10 @@ JQPane {
         }
 
         JQSettingsCheckBox {
-            id: processManage
-            titleText: qsTr("process.manage")
+            id: systemRun
+            titleText: qsTr("system.run")
             titleWidth: 170
-            tipText: qsTr("进程管理：operation=list/search/kill，可列出进程、按关键字或 PID 搜索，并按 PID 终止进程。")
-        }
-
-        JQSettingsCheckBox {
-            id: processExec
-            titleText: qsTr("process.exec")
-            titleWidth: 170
-            tipText: qsTr("基于 QProcess 远程执行进程命令，返回 exitCode/stdout/stderr 等结果。")
-        }
-
-        JQSettingsCheckBox {
-            id: processWhich
-            titleText: qsTr("process.which")
-            titleWidth: 170
-            tipText: qsTr("探测命令是否可执行并返回可执行路径，支持 program 或 programs 批量查询。")
+            tipText: qsTr("远程执行进程命令，返回 exitCode/stdout/stderr 等结果。")
         }
 
         JQSettingsCheckBox {
@@ -176,6 +162,20 @@ JQPane {
             titleText: qsTr("system.input")
             titleWidth: 170
             tipText: qsTr("输入控制动作列表：mouse.move/click/scroll/drag、keyboard.down/up/tap/text、delay；异步入队且 latest-wins。")
+        }
+
+        JQSettingsCheckBox {
+            id: processManage
+            titleText: qsTr("process.manage")
+            titleWidth: 170
+            tipText: qsTr("进程管理：operation=list/search/kill，可列出进程、按关键字或 PID 搜索，并按 PID 终止进程。")
+        }
+
+        JQSettingsCheckBox {
+            id: processWhich
+            titleText: qsTr("process.which")
+            titleWidth: 170
+            tipText: qsTr("探测命令是否可执行并返回可执行路径，支持 program 或 programs 批量查询。")
         }
 
         JQSettingsCheckBox {

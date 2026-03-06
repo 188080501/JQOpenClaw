@@ -3,8 +3,8 @@ HEADERS *= \
     $$PWD/capabilities/file/fileaccesswrite.h \
     $$PWD/capabilities/node/nodeselfupdate.h \
     $$PWD/capabilities/process/processmanage.h \
-    $$PWD/capabilities/process/processexec.h \
     $$PWD/capabilities/process/processwhich.h \
+    $$PWD/capabilities/system/systemrun.h \
     $$PWD/capabilities/system/systemscreenshot.h \
     $$PWD/capabilities/system/systeminfo.h \
     $$PWD/capabilities/system/systeminput.h \
@@ -16,8 +16,8 @@ SOURCES *= \
     $$PWD/capabilities/file/fileaccesswrite.cpp \
     $$PWD/capabilities/node/nodeselfupdate.cpp \
     $$PWD/capabilities/process/processmanage.cpp \
-    $$PWD/capabilities/process/processexec.cpp \
     $$PWD/capabilities/process/processwhich.cpp \
+    $$PWD/capabilities/system/systemrun.cpp \
     $$PWD/capabilities/system/systemscreenshot.cpp \
     $$PWD/capabilities/system/systeminfo.cpp \
     $$PWD/capabilities/system/systeminput.cpp \

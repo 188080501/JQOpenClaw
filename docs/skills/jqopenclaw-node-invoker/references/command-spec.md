@@ -24,7 +24,7 @@
 - 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。
 - `paramsJSON` 缺失或 `null` 时按空对象处理；若存在但不是字符串、为空字符串、或解析后不是对象，返回 `INVALID_PARAMS`。
 - `node.invoke.params.timeoutMs` 可省略；若传入，必须为非负整数（毫秒），否则返回 `INVALID_PARAMS`。其中 `0` 视为立即超时。
-- `node.invoke.params.timeoutMs` 会参与请求预算裁剪。当前节点内部仅将 `process.exec.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值）。
+- `node.invoke.params.timeoutMs` 会参与请求预算裁剪。当前节点内部仅将 `system.run.params.timeoutMs` 与 `file.read(operation=rg)` 的内部执行超时裁剪到该预算内（取更小值）。
 - 即便省略 `node.invoke.params.timeoutMs`，网关/调用端仍存在等待超时（当前 OpenClaw 侧常见默认约 `30000ms`，CLI `openclaw nodes invoke` 默认 `15000ms`）。
 - 实际可用执行时长取决于最先触发的超时层：调用端/网关等待超时、`node.invoke.params.timeoutMs`（若传入）、能力内部超时。
 
@@ -359,36 +359,37 @@
   - `deleted`
   - `deleteMode`：固定 `trash`
 
-## 4. process.exec
+## 4. system.run
 
 用途：远程执行进程命令（QProcess）。
 
 `params`：
-- `command`：字符串，不支持；传入会返回 `INVALID_PARAMS`。
-- `program`：字符串，必填。
-- `arguments`：字符串数组，可选。
-- `workingDirectory`：字符串，可选。
+- `command`：字符串或字符串数组，可选。
+  - 数组模式：首元素为程序名，后续元素为参数。
+  - 字符串模式：等价仅提供程序名（不拆 shell）。
+- `program`：字符串，可选。与 `command` 二选一至少提供一个。
+- `arguments`：字符串数组，可选。与 `program` 搭配。
+- `cwd` / `workingDirectory`：字符串，可选。
 - `stdin`：字符串，可选。
-- `timeoutMs`：数字，可选，默认 `30000`，范围 `[100, 300000]`。
+- `commandTimeoutMs` / `timeoutMs`：数字，可选，默认 `30000`，范围 `[100, 300000]`。
+- `env`（对象或 `KEY=VALUE` 数组）/ `environment`（对象）：可选。
 - `inheritEnvironment`：布尔，可选，默认 `true`。
-- `environment`：对象，可选，键和值都必须是字符串。
 - `detached`：布尔，可选，默认 `false`。为 `true` 时以分离模式启动并立即返回。
 - `mergeChannels`：布尔，可选，默认 `false`。
 - 约束：`detached=true` 时不支持 `stdin` 与 `mergeChannels=true`。
-- 超时裁剪：若设置了 `node.invoke.timeoutMs`（含 `0`），实际执行超时为 `min(process.exec.params.timeoutMs, node.invoke.timeoutMs)`。
+- 超时裁剪：若设置了 `node.invoke.timeoutMs`（含 `0`），实际执行超时为 `min(system.run.params.timeoutMs, node.invoke.timeoutMs)`。
 
-示例（program 模式）：
+示例（command 数组模式）：
 
 ```json
 {
   "method": "node.invoke",
   "params": {
     "nodeId": "<node-id>",
-    "command": "process.exec",
+    "command": "system.run",
     "params": {
-      "program": "ping",
-      "arguments": ["127.0.0.1", "-n", "2"],
-      "timeoutMs": 15000
+      "command": ["ping", "127.0.0.1", "-n", "2"],
+      "commandTimeoutMs": 15000
     },
     "timeoutMs": 20000,
     "idempotencyKey": "<uuid>"
@@ -678,7 +679,7 @@
 ## 12. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `process.exec` / `process.which` / `system.notify` / `system.clipboard` / `system.input` / `node.selfUpdate` 参数校验失败）。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `system.run` / `process.which` / `system.notify` / `system.clipboard` / `system.input` / `node.selfUpdate` 参数校验失败）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`
@@ -689,7 +690,7 @@
   - 常见原因：目标进程不存在、权限不足、非 Windows 平台、命中关键进程保护、终止失败或等待失败。
   - 优先检查 `pid`、节点运行权限、平台类型与目标进程存活状态。
 
-- `PROCESS_EXEC_FAILED`
+- `SYSTEM_RUN_FAILED`
   - 常见原因：程序不存在、权限不足、启动失败等无法产出结构化执行结果。
   - 优先检查 `program`、`workingDirectory`、权限、运行环境。
 
@@ -725,7 +726,7 @@
   - `node.selfUpdate` 下载成功但 MD5 校验不匹配。
 - `command not allowlisted`
   - 网关策略拦截。
-  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`process.exec`、`process.which`、`system.notify`、`system.clipboard`、`system.input`、`node.selfUpdate`）。
+  - 在网关配置 `gateway.nodes.allowCommands` 增加目标命令（如 `file.read`、`file.write`、`process.manage`、`system.run`、`process.which`、`system.notify`、`system.clipboard`、`system.input`、`node.selfUpdate`）。
 
 ## 13. system.input
 

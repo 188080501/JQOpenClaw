@@ -1,5 +1,5 @@
 // .h include
-#include "capabilities/process/processexec.h"
+#include "capabilities/system/systemrun.h"
 
 // Qt lib import
 #include <QDebug>
@@ -34,7 +34,7 @@ bool parseArguments(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec internal error: arguments output pointer is null");
+            *error = QStringLiteral("system.run internal error: arguments output pointer is null");
         }
         return false;
     }
@@ -49,7 +49,7 @@ bool parseArguments(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec arguments must be string array");
+            *error = QStringLiteral("system.run arguments must be string array");
         }
         return false;
     }
@@ -62,7 +62,7 @@ bool parseArguments(
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("process.exec arguments[%1] must be string").arg(i);
+                *error = QStringLiteral("system.run arguments[%1] must be string").arg(i);
             }
             return false;
         }
@@ -83,7 +83,7 @@ bool parseOptionalBool(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec internal error: bool output pointer is null");
+            *error = QStringLiteral("system.run internal error: bool output pointer is null");
         }
         return false;
     }
@@ -98,7 +98,7 @@ bool parseOptionalBool(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec %1 must be boolean").arg(field);
+            *error = QStringLiteral("system.run %1 must be boolean").arg(field);
         }
         return false;
     }
@@ -117,7 +117,7 @@ bool parseTimeoutMs(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec internal error: timeout output pointer is null");
+            *error = QStringLiteral("system.run internal error: timeout output pointer is null");
         }
         return false;
     }
@@ -132,7 +132,7 @@ bool parseTimeoutMs(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec timeoutMs must be number");
+            *error = QStringLiteral("system.run timeoutMs must be number");
         }
         return false;
     }
@@ -143,7 +143,7 @@ bool parseTimeoutMs(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec timeoutMs is invalid");
+            *error = QStringLiteral("system.run timeoutMs is invalid");
         }
         return false;
     }
@@ -153,7 +153,7 @@ bool parseTimeoutMs(
         if ( error != nullptr )
         {
             *error = QStringLiteral(
-                "process.exec timeoutMs out of range [%1, %2]"
+                "system.run timeoutMs out of range [%1, %2]"
             ).arg(processMinTimeoutMs).arg(processMaxTimeoutMs);
         }
         return false;
@@ -173,7 +173,7 @@ bool parseEnvironment(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec internal error: environment output pointer is null");
+            *error = QStringLiteral("system.run internal error: environment output pointer is null");
         }
         return false;
     }
@@ -203,7 +203,7 @@ bool parseEnvironment(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec environment must be object");
+            *error = QStringLiteral("system.run environment must be object");
         }
         return false;
     }
@@ -216,7 +216,7 @@ bool parseEnvironment(
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("process.exec environment contains empty key");
+                *error = QStringLiteral("system.run environment contains empty key");
             }
             return false;
         }
@@ -224,7 +224,7 @@ bool parseEnvironment(
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("process.exec environment key \"%1\" must be string value").arg(key);
+                *error = QStringLiteral("system.run environment key \"%1\" must be string value").arg(key);
             }
             return false;
         }
@@ -257,7 +257,7 @@ bool parseExecuteRequest(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec internal error: output pointer is null");
+            *error = QStringLiteral("system.run internal error: output pointer is null");
         }
         return false;
     }
@@ -266,7 +266,7 @@ bool parseExecuteRequest(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec params must be object");
+            *error = QStringLiteral("system.run params must be object");
         }
         return false;
     }
@@ -279,7 +279,7 @@ bool parseExecuteRequest(
         if ( error != nullptr )
         {
             *error = QStringLiteral(
-                "process.exec command mode is not supported; use program and arguments"
+                "system.run command mode is not supported; use program and arguments"
             );
         }
         return false;
@@ -290,7 +290,7 @@ bool parseExecuteRequest(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec requires program");
+            *error = QStringLiteral("system.run requires program");
         }
         return false;
     }
@@ -316,7 +316,7 @@ bool parseExecuteRequest(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec stdin must be string");
+            *error = QStringLiteral("system.run stdin must be string");
         }
         return false;
     }
@@ -358,7 +358,7 @@ bool parseExecuteRequest(
             if ( error != nullptr )
             {
                 *error = QStringLiteral(
-                    "process.exec mergeChannels is not supported when detached is true"
+                    "system.run mergeChannels is not supported when detached is true"
                 );
             }
             return false;
@@ -368,7 +368,7 @@ bool parseExecuteRequest(
             if ( error != nullptr )
             {
                 *error = QStringLiteral(
-                    "process.exec stdin is not supported when detached is true"
+                    "system.run stdin is not supported when detached is true"
                 );
             }
             return false;
@@ -440,7 +440,7 @@ QString processResultClass(bool timedOut, QProcess::ExitStatus exitStatus, int e
 }
 }
 
-bool ProcessExec::execute(
+bool SystemRun::execute(
     const QJsonValue &params,
     int invokeTimeoutMs,
     QJsonObject *result,
@@ -457,7 +457,7 @@ bool ProcessExec::execute(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("process.exec output pointer is null");
+            *error = QStringLiteral("system.run output pointer is null");
         }
         return false;
     }
@@ -501,7 +501,7 @@ bool ProcessExec::execute(
     }
 
     qInfo().noquote() << QStringLiteral(
-        "[capability.process.exec] start program=%1 args=%2 timeoutMs=%3 detached=%4 workingDirectory=%5"
+        "[capability.system.run] start program=%1 args=%2 timeoutMs=%3 detached=%4 workingDirectory=%5"
     ).arg(
         program,
         arguments.join(' '),
@@ -532,12 +532,12 @@ bool ProcessExec::execute(
             if ( error != nullptr )
             {
                 *error = startError.isEmpty()
-                    ? QStringLiteral("process.exec failed to start detached process")
-                    : QStringLiteral("process.exec failed to start detached process: %1")
+                    ? QStringLiteral("system.run failed to start detached process")
+                    : QStringLiteral("system.run failed to start detached process: %1")
                           .arg(startError);
             }
             qWarning().noquote() << QStringLiteral(
-                "[capability.process.exec] failed to start detached program=%1 error=%2"
+                "[capability.system.run] failed to start detached program=%1 error=%2"
             ).arg(program, startError);
             return false;
         }
@@ -563,7 +563,7 @@ bool ProcessExec::execute(
 
         *result = out;
         qInfo().noquote() << QStringLiteral(
-            "[capability.process.exec] detached program=%1 pid=%2 elapsedMs=%3"
+            "[capability.system.run] detached program=%1 pid=%2 elapsedMs=%3"
         ).arg(
             program,
             detachedPid > 0 ? QString::number(detachedPid) : QStringLiteral("unknown"),
@@ -592,11 +592,11 @@ bool ProcessExec::execute(
         if ( error != nullptr )
         {
             *error = startError.isEmpty()
-                ? QStringLiteral("process.exec failed to start process")
-                : QStringLiteral("process.exec failed to start process: %1").arg(startError);
+                ? QStringLiteral("system.run failed to start process")
+                : QStringLiteral("system.run failed to start process: %1").arg(startError);
         }
         qWarning().noquote() << QStringLiteral(
-            "[capability.process.exec] failed to start program=%1 error=%2"
+            "[capability.system.run] failed to start program=%1 error=%2"
         ).arg(program, startError);
         return false;
     }
@@ -650,7 +650,7 @@ bool ProcessExec::execute(
 
     *result = out;
     qInfo().noquote() << QStringLiteral(
-        "[capability.process.exec] done program=%1 exitCode=%2 timedOut=%3 elapsedMs=%4"
+        "[capability.system.run] done program=%1 exitCode=%2 timedOut=%3 elapsedMs=%4"
     ).arg(
         program,
         QString::number(process.exitCode()),

@@ -1,12 +1,12 @@
-#ifndef JQOPENCLAW_CAPABILITIES_PROCESS_PROCESSEXEC_H_
-#define JQOPENCLAW_CAPABILITIES_PROCESS_PROCESSEXEC_H_
+#ifndef JQOPENCLAW_CAPABILITIES_SYSTEM_SYSTEMRUN_H_
+#define JQOPENCLAW_CAPABILITIES_SYSTEM_SYSTEMRUN_H_
 
 // Qt lib import
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
 
-class ProcessExec
+class SystemRun
 {
 public:
     static bool execute(
@@ -18,4 +18,4 @@ public:
     );
 };
 
-#endif // JQOPENCLAW_CAPABILITIES_PROCESS_PROCESSEXEC_H_
+#endif // JQOPENCLAW_CAPABILITIES_SYSTEM_SYSTEMRUN_H_
