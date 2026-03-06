@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QSet>
 #include <QStringList>
 #include <QtGlobal>
 
@@ -17,6 +18,24 @@ const int processDefaultTimeoutMs = 30000;
 const int processMinTimeoutMs = 100;
 const int processMaxTimeoutMs = 300000;
 const int processKillWaitTimeoutMs = 3000;
+const QSet<QString> unsafeEnvironmentKeys =
+{
+    QStringLiteral("LD_PRELOAD"),
+    QStringLiteral("LD_LIBRARY_PATH"),
+    QStringLiteral("DYLD_INSERT_LIBRARIES"),
+    QStringLiteral("DYLD_LIBRARY_PATH"),
+    QStringLiteral("DYLD_FRAMEWORK_PATH"),
+    QStringLiteral("DYLD_FORCE_FLAT_NAMESPACE"),
+    QStringLiteral("NODE_OPTIONS"),
+    QStringLiteral("RUBYOPT"),
+    QStringLiteral("PERL5OPT"),
+    QStringLiteral("PYTHONHOME"),
+    QStringLiteral("PYTHONPATH"),
+    QStringLiteral("BASH_ENV"),
+    QStringLiteral("ENV"),
+    QStringLiteral("SHELLOPTS"),
+    QStringLiteral("PS4"),
+};
 
 QString extractString(const QJsonObject &object, const QString &key)
 {
@@ -228,6 +247,21 @@ bool parseEnvironment(
             }
             return false;
         }
+        const QString normalizedKey = key.toUpper();
+        if ( normalizedKey == QStringLiteral("PATH") )
+        {
+            qWarning().noquote() << QStringLiteral(
+                "[capability.system.run] ignore environment override key=%1"
+            ).arg(key);
+            continue;
+        }
+        if ( unsafeEnvironmentKeys.contains(normalizedKey) )
+        {
+            qWarning().noquote() << QStringLiteral(
+                "[capability.system.run] ignore unsafe environment key=%1"
+            ).arg(key);
+            continue;
+        }
         environment->insert(key, it.value().toString());
     }
     return true;
@@ -242,6 +276,7 @@ bool parseExecuteRequest(
     int *timeoutMs,
     bool *detached,
     bool *mergeChannels,
+    bool *needsScreenRecording,
     QProcessEnvironment *environment,
     QString *error
 )
@@ -253,6 +288,7 @@ bool parseExecuteRequest(
          ( timeoutMs == nullptr ) ||
          ( detached == nullptr ) ||
          ( mergeChannels == nullptr ) ||
+         ( needsScreenRecording == nullptr ) ||
          ( environment == nullptr ) )
     {
         if ( error != nullptr )
@@ -345,6 +381,16 @@ bool parseExecuteRequest(
             QStringLiteral("mergeChannels"),
             false,
             mergeChannels,
+            error
+        ) )
+    {
+        return false;
+    }
+    if ( !parseOptionalBool(
+            paramsObject,
+            QStringLiteral("needsScreenRecording"),
+            false,
+            needsScreenRecording,
             error
         ) )
     {
@@ -469,6 +515,7 @@ bool SystemRun::execute(
     int timeoutMs = processDefaultTimeoutMs;
     bool detached = false;
     bool mergeChannels = false;
+    bool needsScreenRecording = false;
     QProcessEnvironment environment;
     QString parseError;
     if ( !parseExecuteRequest(
@@ -480,6 +527,7 @@ bool SystemRun::execute(
             &timeoutMs,
             &detached,
             &mergeChannels,
+            &needsScreenRecording,
             &environment,
             &parseError
         ) )
@@ -501,13 +549,14 @@ bool SystemRun::execute(
     }
 
     qInfo().noquote() << QStringLiteral(
-        "[capability.system.run] start program=%1 args=%2 timeoutMs=%3 detached=%4 workingDirectory=%5"
+        "[capability.system.run] start program=%1 args=%2 timeoutMs=%3 detached=%4 workingDirectory=%5 needsScreenRecording=%6"
     ).arg(
         program,
         arguments.join(' '),
         QString::number(timeoutMs),
         detached ? QStringLiteral("true") : QStringLiteral("false"),
-        workingDirectory
+        workingDirectory,
+        needsScreenRecording ? QStringLiteral("true") : QStringLiteral("false")
     );
 
     if ( detached )
@@ -549,6 +598,7 @@ bool SystemRun::execute(
         out.insert(QStringLiteral("timeoutMs"), timeoutMs);
         out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
         out.insert(QStringLiteral("detached"), true);
+        out.insert(QStringLiteral("needsScreenRecording"), needsScreenRecording);
         if ( detachedPid > 0 )
         {
             out.insert(QStringLiteral("pid"), static_cast<double>(detachedPid));
@@ -631,6 +681,7 @@ bool SystemRun::execute(
     out.insert(QStringLiteral("timeoutMs"), timeoutMs);
     out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
     out.insert(QStringLiteral("detached"), false);
+    out.insert(QStringLiteral("needsScreenRecording"), needsScreenRecording);
     out.insert(QStringLiteral("timedOut"), timedOut);
     out.insert(QStringLiteral("exitCode"), exitCode);
     out.insert(

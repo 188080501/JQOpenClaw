@@ -372,8 +372,9 @@
 - `cwd` / `workingDirectory`：字符串，可选。
 - `stdin`：字符串，可选。
 - `commandTimeoutMs` / `timeoutMs`：数字，可选，默认 `30000`，范围 `[100, 300000]`。
-- `env`（对象或 `KEY=VALUE` 数组）/ `environment`（对象）：可选。
+- `env`（对象或 `KEY=VALUE` 数组）/ `environment`（对象）：可选；会忽略 `PATH` 覆盖，并过滤高风险键（如 `LD_PRELOAD`、`DYLD_INSERT_LIBRARIES`、`NODE_OPTIONS`、`PYTHONPATH`）。
 - `inheritEnvironment`：布尔，可选，默认 `true`。
+- `needsScreenRecording`：布尔，可选，默认 `false`。
 - `detached`：布尔，可选，默认 `false`。为 `true` 时以分离模式启动并立即返回。
 - `mergeChannels`：布尔，可选，默认 `false`。
 - 约束：`detached=true` 时不支持 `stdin` 与 `mergeChannels=true`。
@@ -404,6 +405,7 @@
 - `timeoutMs`
 - `elapsedMs`
 - `detached`
+- `needsScreenRecording`
 - `timedOut`
 - `exitCode`
 - `exitStatus`
