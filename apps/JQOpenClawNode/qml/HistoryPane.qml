@@ -49,6 +49,11 @@ JQPane {
             color: "#111827"
         }
 
+        Item {
+            width: 1
+            height: 1
+        }
+
         Repeater {
             model: 10
 
