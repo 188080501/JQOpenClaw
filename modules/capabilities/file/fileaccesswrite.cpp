@@ -255,13 +255,18 @@ bool decodeContent(
         return true;
     }
 
-    const QByteArray decoded = QByteArray::fromBase64(content.toUtf8());
     if ( content.trimmed().isEmpty() )
     {
         bytes->clear();
         return true;
     }
-    if ( decoded.isEmpty() )
+
+    const QByteArray::FromBase64Result decodedResult =
+        QByteArray::fromBase64Encoding(
+            content.toUtf8(),
+            QByteArray::Base64Encoding | QByteArray::AbortOnBase64DecodingErrors
+        );
+    if ( decodedResult.decodingStatus != QByteArray::Base64DecodingStatus::Ok )
     {
         if ( error != nullptr )
         {
@@ -269,8 +274,7 @@ bool decodeContent(
         }
         return false;
     }
-
-    *bytes = decoded;
+    *bytes = decodedResult.decoded;
     return true;
 }
 
