@@ -4,6 +4,7 @@
 // Qt lib import
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QProcess>
 #include <QProcessEnvironment>
@@ -267,6 +268,74 @@ bool parseEnvironment(
     return true;
 }
 
+bool isCmdProgramName(const QString &program)
+{
+    const QString trimmedProgram = program.trimmed();
+    if ( trimmedProgram.compare(QStringLiteral("cmd"), Qt::CaseInsensitive) == 0 )
+    {
+        return true;
+    }
+    if ( trimmedProgram.compare(QStringLiteral("cmd.exe"), Qt::CaseInsensitive) == 0 )
+    {
+        return true;
+    }
+
+    const QString fileName = QFileInfo(trimmedProgram).fileName();
+    if ( fileName.isEmpty() )
+    {
+        return false;
+    }
+    return ( fileName.compare(QStringLiteral("cmd"), Qt::CaseInsensitive) == 0 ) ||
+        ( fileName.compare(QStringLiteral("cmd.exe"), Qt::CaseInsensitive) == 0 );
+}
+
+bool normalizeCmdStartEmptyTitleArgument(
+    const QString &program,
+    QStringList *arguments
+)
+{
+    if ( arguments == nullptr )
+    {
+        return false;
+    }
+    if ( !isCmdProgramName(program) || ( arguments->size() < 3 ) )
+    {
+        return false;
+    }
+
+    int shellModeIndex = 0;
+    if ( arguments->at(0).compare(QStringLiteral("/s"), Qt::CaseInsensitive) == 0 )
+    {
+        shellModeIndex = 1;
+        if ( arguments->size() < 4 )
+        {
+            return false;
+        }
+    }
+
+    if ( ( arguments->at(shellModeIndex).compare(QStringLiteral("/c"), Qt::CaseInsensitive) != 0 ) &&
+         ( arguments->at(shellModeIndex).compare(QStringLiteral("/k"), Qt::CaseInsensitive) != 0 ) )
+    {
+        return false;
+    }
+
+    const int startIndex = shellModeIndex + 1;
+    if ( arguments->at(startIndex).compare(QStringLiteral("start"), Qt::CaseInsensitive) != 0 )
+    {
+        return false;
+    }
+
+    const int titleIndex = startIndex + 1;
+    if ( arguments->at(titleIndex) != QStringLiteral("\"\"") )
+    {
+        return false;
+    }
+
+    // Shell-style empty title may arrive as literal "\"\"" when transported as argv.
+    ( *arguments )[titleIndex].clear();
+    return true;
+}
+
 bool parseExecuteRequest(
     const QJsonValue &params,
     QString *program,
@@ -335,6 +404,12 @@ bool parseExecuteRequest(
     if ( !parseArguments(paramsObject, arguments, error) )
     {
         return false;
+    }
+    if ( normalizeCmdStartEmptyTitleArgument(*program, arguments) )
+    {
+        qInfo().noquote() << QStringLiteral(
+            "[capability.system.run] normalized cmd start empty title argument"
+        );
     }
 
     *workingDirectory = extractString(paramsObject, QStringLiteral("workingDirectory"));
