@@ -24,7 +24,7 @@
 namespace
 {
 const qint64 defaultReadMaxBytes = 1024 * 1024;
-const qint64 maxReadMaxBytes = 20 * 1024 * 1024;
+const qint64 maxReadMaxBytes = 2 * 1024 * 1024;
 const qint64 defaultReadChunkBytes = 256 * 1024;
 const qint64 maxReadLineSpan = 50000;
 const qint64 defaultReadMaxEntries = 200;

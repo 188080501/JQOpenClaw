@@ -37,7 +37,7 @@
 - `operation`：字符串，可选，默认 `read`。可选值：`read` / `lines` / `list` / `rg` / `stat` / `md5`。
 - `read` 模式参数：
   - `encoding`：字符串，可选，`utf8`（默认）或 `base64`。
-  - `maxBytes`：整数，可选，默认 `1048576`，范围 `[1, 20971520]`。
+  - `maxBytes`：整数，可选，默认 `1048576`，范围 `[1, 2097152]`。
   - `offsetBytes`（或 `offset`）：整数，可选，默认 `0`。用于分块读取起始偏移量，范围 `[0, sizeBytes]`。
 - `lines` 模式参数：
   - `startLine`（或 `fromLine`）：整数，必填，1-based 起始行号。
