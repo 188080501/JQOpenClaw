@@ -2,7 +2,7 @@
 import JQControls
 
 JQPane {
-    id: historyPane    
+    id: historyPanel
     height: listColumn.height + 40
 
     readonly property int panePadding: 12
@@ -31,7 +31,7 @@ JQPane {
         target: nodeApplication
 
         function onInvokeHistoryChanged(invokeHistory) {
-            historyPane.historyRecords = invokeHistory || [];
+            historyPanel.historyRecords = invokeHistory || [];
         }
     }
 
@@ -61,8 +61,8 @@ JQPane {
                 width: parent.width
                 height: rowHeight
 
-                readonly property var historyItem: ( index < historyPane.historyRecords.length )
-                    ? historyPane.historyRecords[index]
+                readonly property var historyItem: ( index < historyPanel.historyRecords.length )
+                    ? historyPanel.historyRecords[index]
                     : null
 
                 Rectangle {
@@ -71,7 +71,7 @@ JQPane {
                     color: "#f3f4f6"
                     border.width: 1
                     border.color: "#e5e7eb"
-                    visible: index < historyPane.historyRecords.length
+                    visible: index < historyPanel.historyRecords.length
 
                     Row {
                         id: itemRow
@@ -108,7 +108,7 @@ JQPane {
 
     Text {
         anchors.centerIn: parent
-        visible: historyPane.historyRecords.length === 0
+        visible: historyPanel.historyRecords.length === 0
         text: qsTr("暂无调用记录")
         font.pixelSize: 20
         color: "#111827"

@@ -3,7 +3,7 @@ import JQControls
 import JQOpenClawNode
 
 JQPane {
-    id: infoPane
+    id: infoPanel
     height: contentColumn.height + 40
     readonly property string openClawRepoUrl: "https://github.com/openclaw/openclaw"
     readonly property string jqOpenClawRepoUrl: "https://github.com/188080501/JQOpenClaw"
@@ -59,7 +59,7 @@ JQPane {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Qt.openUrlExternally(infoPane.openClawRepoUrl)
+                    onClicked: Qt.openUrlExternally(infoPanel.openClawRepoUrl)
                 }
             }
 
@@ -75,7 +75,7 @@ JQPane {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Qt.openUrlExternally(infoPane.jqOpenClawRepoUrl)
+                    onClicked: Qt.openUrlExternally(infoPanel.jqOpenClawRepoUrl)
                 }
             }
         }

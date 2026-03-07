@@ -2,7 +2,7 @@ import QtQuick
 import JQControls
 
 JQPane {
-    id: softwarePane
+    id: softwarePanel
     height: contentColumn.height + 40
     property bool applyingConfig: false
 
@@ -62,7 +62,7 @@ JQPane {
             titleWidth: 170
 
             onCheckedChanged: {
-                if ( softwarePane.applyingConfig || !nodeApplication )
+                if ( softwarePanel.applyingConfig || !nodeApplication )
                 {
                     return;
                 }
@@ -85,7 +85,7 @@ JQPane {
             titleWidth: 170
 
             onCheckedChanged: {
-                if ( softwarePane.applyingConfig || !nodeApplication )
+                if ( softwarePanel.applyingConfig || !nodeApplication )
                 {
                     return;
                 }

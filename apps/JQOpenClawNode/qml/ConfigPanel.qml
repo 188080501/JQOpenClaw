@@ -2,7 +2,7 @@
 import JQControls
 
 JQPane {
-    id: configPane
+    id: configPanel
     height: contentColumn.height + 40
 
     function readString(configObject, key, defaultValue) {

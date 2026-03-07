@@ -41,23 +41,23 @@ JQWindow {
             width: pageFlickable.width - 40
             spacing: 12
 
-            InfoPane {
+            InfoPanel {
                 width: parent.width
             }
 
-            ConfigPane {
+            ConfigPanel {
                 width: parent.width
             }
 
-            PermissionPane {
+            PermissionPanel {
                 width: parent.width
             }
 
-            SoftwarePane {
+            SoftwarePanel {
                 width: parent.width
             }
 
-            HistoryPane {
+            HistoryPanel {
                 width: parent.width
             }
         }

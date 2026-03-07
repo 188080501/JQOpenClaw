@@ -2,7 +2,7 @@
 import JQControls
 
 JQPane {
-    id: permissionPane
+    id: permissionPanel
     height: contentColumn.height + 40
     property bool applyingConfig: false
 
