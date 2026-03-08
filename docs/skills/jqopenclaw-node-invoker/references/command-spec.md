@@ -652,11 +652,11 @@
 
 ## 11. node.selfUpdate
 
-用途：执行节点自更新。流程为参数校验 ->（可选）当前程序 MD5 比对 -> HTTP 下载 ->（可选）下载包 MD5 比对 -> 写入临时文件 -> 生成并启动更新 bat -> `node.invoke` 回包后延迟退出当前节点。
+用途：执行节点自更新。流程为参数校验 -> 当前程序 MD5 比对 -> HTTP 下载 -> 下载包 MD5 比对 -> 写入临时文件 -> 生成并启动更新 bat -> `node.invoke` 回包后延迟退出当前节点。
 
 `params`：
 - `downloadUrl`：字符串，必填。新版本程序完整下载地址（仅支持 `http/https`）。
-- `md5`：字符串，可选。32 位十六进制 MD5；若提供且与当前程序一致，返回无需更新。
+- `md5`：字符串，必填。32 位十六进制 MD5；若与当前程序一致，返回无需更新。
 
 返回重点（`payload`）：
 - 无需更新：
@@ -670,7 +670,7 @@
   - `updated=true`
   - `downloadUrl`
   - `downloadedMd5`
-  - `expectedMd5`（若调用时提供）
+  - `expectedMd5`
   - `willExit=true`
   - `status=exiting_for_self_update`
 
@@ -681,7 +681,7 @@
 ## 12. 常见错误与处理
 
 - `INVALID_PARAMS`
-  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `system.run` / `process.which` / `system.notify` / `system.clipboard` / `system.input` / `node.selfUpdate` 参数校验失败）。
+  - 参数缺失、类型不匹配或超出范围（含 `file.read` / `file.write` / `process.manage` / `system.run` / `process.which` / `system.notify` / `system.clipboard` / `system.input` / `node.selfUpdate` 参数校验失败，例如 `node.selfUpdate` 缺失必填 `md5`）。
   - 修正字段后重试。
 
 - `FILE_READ_FAILED` / `FILE_WRITE_FAILED`

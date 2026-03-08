@@ -367,7 +367,19 @@ bool NodeSelfUpdate::execute(
     }
 
     const QString expectedMd5 = extractString(paramsObject, QStringLiteral("md5")).toLower();
-    if ( !expectedMd5.isEmpty() && !isValidMd5Hex(expectedMd5) )
+    if ( expectedMd5.isEmpty() )
+    {
+        if ( invalidParams != nullptr )
+        {
+            *invalidParams = true;
+        }
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("node.selfUpdate requires md5");
+        }
+        return false;
+    }
+    if ( !isValidMd5Hex(expectedMd5) )
     {
         if ( invalidParams != nullptr )
         {
@@ -392,8 +404,7 @@ bool NodeSelfUpdate::execute(
 
     QString currentMd5;
     QString currentMd5Error;
-    if ( !expectedMd5.isEmpty() &&
-         !calculateFileMd5Hex(appPath, &currentMd5, &currentMd5Error) )
+    if ( !calculateFileMd5Hex(appPath, &currentMd5, &currentMd5Error) )
     {
         if ( error != nullptr )
         {
@@ -402,7 +413,7 @@ bool NodeSelfUpdate::execute(
         return false;
     }
 
-    if ( !expectedMd5.isEmpty() && ( currentMd5 == expectedMd5 ) )
+    if ( currentMd5 == expectedMd5 )
     {
         QJsonObject out;
         out.insert(QStringLiteral("operation"), QStringLiteral("selfUpdate"));
@@ -431,7 +442,7 @@ bool NodeSelfUpdate::execute(
     }
 
     const QString downloadedMd5 = calculateMd5Hex(downloadedBytes);
-    if ( !expectedMd5.isEmpty() && ( downloadedMd5 != expectedMd5 ) )
+    if ( downloadedMd5 != expectedMd5 )
     {
         if ( md5Mismatch != nullptr )
         {
@@ -510,10 +521,7 @@ bool NodeSelfUpdate::execute(
         downloadUrl.toString(QUrl::FullyEncoded)
     );
     out.insert(QStringLiteral("downloadedMd5"), downloadedMd5);
-    if ( !expectedMd5.isEmpty() )
-    {
-        out.insert(QStringLiteral("expectedMd5"), expectedMd5);
-    }
+    out.insert(QStringLiteral("expectedMd5"), expectedMd5);
     out.insert(QStringLiteral("willExit"), true);
     out.insert(QStringLiteral("status"), QStringLiteral("exiting_for_self_update"));
     *result = out;
