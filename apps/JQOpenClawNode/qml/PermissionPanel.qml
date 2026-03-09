@@ -42,6 +42,7 @@ JQPane {
         applyingConfig = true;
         fileRead.checked = readBool(permissionObject, "file.read");
         fileWrite.checked = readBool(permissionObject, "file.write");
+        processExec.checked = readBool(permissionObject, "process.exec");
         processManage.checked = readBool(permissionObject, "process.manage");
         systemRun.checked = readBool(permissionObject, "system.run");
         processWhich.checked = readBool(permissionObject, "process.which");
@@ -68,6 +69,7 @@ JQPane {
 
         permissionObject["file.read"] = fileRead.checked;
         permissionObject["file.write"] = fileWrite.checked;
+        permissionObject["process.exec"] = processExec.checked;
         permissionObject["process.manage"] = processManage.checked;
         permissionObject["system.run"] = systemRun.checked;
         permissionObject["process.which"] = processWhich.checked;
@@ -120,6 +122,13 @@ JQPane {
             titleText: qsTr("file.write")
             titleWidth: 170
             tipText: qsTr("支持写入/移动/删除/目录创建/目录删除：operation=write/move/delete/mkdir/rmdir，并支持 createDirs/overwrite。")
+        }
+
+        JQSettingsCheckBox {
+            id: processExec
+            titleText: qsTr("process.exec")
+            titleWidth: 170
+            tipText: qsTr("进程执行能力：基于 program + arguments 执行命令，支持 detached 后台启动。")
         }
 
         JQSettingsCheckBox {

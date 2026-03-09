@@ -17,6 +17,7 @@ const CapabilityDeclaration capabilityDeclarations[] =
 {
     {"file", "file.read", true},
     {"file", "file.write", true},
+    {"process", "process.exec", true},
     {"process", "process.manage", true},
     {"process", "process.which", true},
     {"system", "system.run", true},

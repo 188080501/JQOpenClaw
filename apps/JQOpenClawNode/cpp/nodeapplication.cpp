@@ -38,6 +38,7 @@
 #include "capabilities/file/fileaccessread.h"
 #include "capabilities/file/fileaccesswrite.h"
 #include "capabilities/node/nodeselfupdate.h"
+#include "capabilities/process/processexec.h"
 #include "capabilities/process/processmanage.h"
 #include "capabilities/process/processwhich.h"
 #include "capabilities/system/systemrun.h"
@@ -511,310 +512,6 @@ bool uploadScreenshotFile(
     }
 
     *fileUrl = fileAccessUrl.toString(QUrl::FullyEncoded);
-    return true;
-}
-
-bool parseSystemRunCommand(
-    const QJsonObject &paramsObject,
-    QString *program,
-    QJsonArray *arguments,
-    QString *error
-)
-{
-    if ( ( program == nullptr ) || ( arguments == nullptr ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: output pointer is null");
-        }
-        return false;
-    }
-
-    program->clear();
-    *arguments = QJsonArray();
-
-    const QJsonValue commandValue = paramsObject.value(QStringLiteral("command"));
-    if ( commandValue.isUndefined() || commandValue.isNull() )
-    {
-        return true;
-    }
-
-    if ( commandValue.isString() )
-    {
-        const QString parsedProgram = commandValue.toString().trimmed();
-        if ( parsedProgram.isEmpty() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.run command must not be empty");
-            }
-            return false;
-        }
-        *program = parsedProgram;
-        return true;
-    }
-
-    if ( !commandValue.isArray() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run command must be string or string array");
-        }
-        return false;
-    }
-
-    const QJsonArray commandArray = commandValue.toArray();
-    if ( commandArray.isEmpty() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run command array must not be empty");
-        }
-        return false;
-    }
-
-    for ( int index = 0; index < commandArray.size(); ++index )
-    {
-        const QJsonValue itemValue = commandArray.at(index);
-        if ( !itemValue.isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.run command[%1] must be string").arg(index);
-            }
-            return false;
-        }
-
-        const QString itemText = itemValue.toString();
-        if ( index == 0 )
-        {
-            const QString parsedProgram = itemText.trimmed();
-            if ( parsedProgram.isEmpty() )
-            {
-                if ( error != nullptr )
-                {
-                    *error = QStringLiteral("system.run command[0] must not be empty");
-                }
-                return false;
-            }
-            *program = parsedProgram;
-            continue;
-        }
-        arguments->append(itemText);
-    }
-
-    return true;
-}
-
-bool parseSystemRunEnvironment(
-    const QJsonObject &paramsObject,
-    QJsonObject *environment,
-    QString *error
-)
-{
-    if ( environment == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: environment output pointer is null");
-        }
-        return false;
-    }
-
-    *environment = QJsonObject();
-    const QJsonValue envValue = paramsObject.value(QStringLiteral("env"));
-    if ( envValue.isUndefined() || envValue.isNull() )
-    {
-        return true;
-    }
-
-    if ( envValue.isObject() )
-    {
-        const QJsonObject envObject = envValue.toObject();
-        for ( auto it = envObject.constBegin(); it != envObject.constEnd(); ++it )
-        {
-            if ( !it.value().isString() )
-            {
-                if ( error != nullptr )
-                {
-                    *error = QStringLiteral(
-                        "system.run env key \"%1\" must be string value"
-                    ).arg(it.key());
-                }
-                return false;
-            }
-        }
-        *environment = envObject;
-        return true;
-    }
-
-    if ( !envValue.isArray() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run env must be object or string array");
-        }
-        return false;
-    }
-
-    const QJsonArray envArray = envValue.toArray();
-    QJsonObject outEnvironment;
-    for ( int index = 0; index < envArray.size(); ++index )
-    {
-        const QJsonValue itemValue = envArray.at(index);
-        if ( !itemValue.isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.run env[%1] must be string").arg(index);
-            }
-            return false;
-        }
-
-        const QString itemText = itemValue.toString();
-        const int splitIndex = itemText.indexOf(QLatin1Char('='));
-        if ( splitIndex <= 0 )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral(
-                    "system.run env[%1] must be KEY=VALUE with non-empty key"
-                ).arg(index);
-            }
-            return false;
-        }
-
-        const QString key = itemText.left(splitIndex).trimmed();
-        if ( key.isEmpty() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral(
-                    "system.run env[%1] must be KEY=VALUE with non-empty key"
-                ).arg(index);
-            }
-            return false;
-        }
-
-        const QString value = itemText.mid(splitIndex + 1);
-        outEnvironment.insert(key, value);
-    }
-
-    *environment = outEnvironment;
-    return true;
-}
-
-bool normalizeSystemRunParams(
-    const QJsonValue &params,
-    QJsonValue *normalizedParams,
-    QString *error
-)
-{
-    if ( normalizedParams == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run normalized params output pointer is null");
-        }
-        return false;
-    }
-
-    if ( !params.isObject() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run params must be object");
-        }
-        return false;
-    }
-
-    QJsonObject paramsObject = params.toObject();
-    const QString programFromProgram = extractString(paramsObject, QStringLiteral("program"));
-
-    QString programFromCommand;
-    QJsonArray argumentsFromCommand;
-    if ( programFromProgram.isEmpty() )
-    {
-        QString parseCommandError;
-        if ( !parseSystemRunCommand(
-                paramsObject,
-                &programFromCommand,
-                &argumentsFromCommand,
-                &parseCommandError
-            ) )
-        {
-            if ( error != nullptr )
-            {
-                *error = parseCommandError;
-            }
-            return false;
-        }
-    }
-
-    paramsObject.remove(QStringLiteral("command"));
-
-    const QString normalizedProgram = !programFromProgram.isEmpty()
-        ? programFromProgram
-        : programFromCommand;
-    if ( normalizedProgram.isEmpty() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run requires command or program");
-        }
-        return false;
-    }
-    paramsObject.insert(QStringLiteral("program"), normalizedProgram);
-
-    if ( programFromProgram.isEmpty() && !argumentsFromCommand.isEmpty() )
-    {
-        paramsObject.insert(QStringLiteral("arguments"), argumentsFromCommand);
-    }
-
-    if ( extractString(paramsObject, QStringLiteral("workingDirectory")).isEmpty() )
-    {
-        const QString cwdValue = extractString(paramsObject, QStringLiteral("cwd"));
-        if ( !cwdValue.isEmpty() )
-        {
-            paramsObject.insert(QStringLiteral("workingDirectory"), cwdValue);
-        }
-    }
-
-    const QJsonValue timeoutValue = paramsObject.value(QStringLiteral("timeoutMs"));
-    if ( timeoutValue.isUndefined() || timeoutValue.isNull() )
-    {
-        const QJsonValue commandTimeoutValue = paramsObject.value(QStringLiteral("commandTimeoutMs"));
-        if ( !commandTimeoutValue.isUndefined() && !commandTimeoutValue.isNull() )
-        {
-            paramsObject.insert(QStringLiteral("timeoutMs"), commandTimeoutValue);
-        }
-    }
-
-    const QJsonValue environmentValue = paramsObject.value(QStringLiteral("environment"));
-    if ( environmentValue.isUndefined() || environmentValue.isNull() )
-    {
-        QJsonObject normalizedEnvironment;
-        QString parseEnvironmentError;
-        if ( !parseSystemRunEnvironment(
-                paramsObject,
-                &normalizedEnvironment,
-                &parseEnvironmentError
-            ) )
-        {
-            if ( error != nullptr )
-            {
-                *error = parseEnvironmentError;
-            }
-            return false;
-        }
-
-        if ( !normalizedEnvironment.isEmpty() )
-        {
-            paramsObject.insert(QStringLiteral("environment"), normalizedEnvironment);
-        }
-    }
-
-    *normalizedParams = paramsObject;
     return true;
 }
 
@@ -2844,28 +2541,11 @@ bool NodeApplication::executeInvokeCommand(
 
     if ( command == QStringLiteral("system.run") )
     {
-        QJsonValue executeParams;
-        QString normalizeError;
-        if ( !normalizeSystemRunParams(params, &executeParams, &normalizeError) )
-        {
-            if ( errorCode != nullptr )
-            {
-                *errorCode = QStringLiteral("INVALID_PARAMS");
-            }
-            if ( errorMessage != nullptr )
-            {
-                *errorMessage = normalizeError.isEmpty()
-                    ? QStringLiteral("invalid system.run params")
-                    : normalizeError;
-            }
-            return false;
-        }
-
         QJsonObject executeResult;
         QString executeError;
         bool invalidParams = false;
         if ( !SystemRun::execute(
-                executeParams,
+                params,
                 invokeTimeoutMs,
                 &executeResult,
                 &executeError,
@@ -2882,6 +2562,38 @@ bool NodeApplication::executeInvokeCommand(
             {
                 *errorMessage = executeError.isEmpty()
                     ? QStringLiteral("failed to run system command")
+                    : executeError;
+            }
+            return false;
+        }
+
+        *payload = executeResult;
+        return true;
+    }
+
+    if ( command == QStringLiteral("process.exec") )
+    {
+        QJsonObject executeResult;
+        QString executeError;
+        bool invalidParams = false;
+        if ( !ProcessExec::execute(
+                params,
+                invokeTimeoutMs,
+                &executeResult,
+                &executeError,
+                &invalidParams
+            ) )
+        {
+            if ( errorCode != nullptr )
+            {
+                *errorCode = invalidParams
+                    ? QStringLiteral("INVALID_PARAMS")
+                    : QStringLiteral("PROCESS_EXEC_FAILED");
+            }
+            if ( errorMessage != nullptr )
+            {
+                *errorMessage = executeError.isEmpty()
+                    ? QStringLiteral("failed to execute process")
                     : executeError;
             }
             return false;

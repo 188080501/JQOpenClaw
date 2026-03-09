@@ -7,7 +7,7 @@ QT += core gui qml quick quickcontrols2 network websockets widgets
 CONFIG += c++17
 CONFIG -= app_bundle
 
-VERSION  = 26.3.6
+VERSION  = 26.3.9
 DEFINES *= JQOPENCLAWNODE_VERSION='\\"$$VERSION\\"'
 
 QMAKE_TARGET_COMPANY     = "JQOpenClaw"

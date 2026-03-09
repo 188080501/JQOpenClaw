@@ -1,5 +1,5 @@
 // .h include
-#include "capabilities/system/systemrun.h"
+#include "capabilities/process/processexec.h"
 
 // Qt lib import
 #include <QDebug>
@@ -7,7 +7,6 @@
 #include <QJsonArray>
 #include <QProcess>
 #include <QProcessEnvironment>
-#include <QSet>
 #include <QStringList>
 #include <QtGlobal>
 
@@ -18,171 +17,93 @@ const int processDefaultTimeoutMs = 30000;
 const int processMinTimeoutMs = 100;
 const int processMaxTimeoutMs = 300000;
 const int processKillWaitTimeoutMs = 3000;
-const QSet<QString> unsafeEnvironmentKeys =
-{
-    QStringLiteral("LD_PRELOAD"),
-    QStringLiteral("LD_LIBRARY_PATH"),
-    QStringLiteral("DYLD_INSERT_LIBRARIES"),
-    QStringLiteral("DYLD_LIBRARY_PATH"),
-    QStringLiteral("DYLD_FRAMEWORK_PATH"),
-    QStringLiteral("DYLD_FORCE_FLAT_NAMESPACE"),
-    QStringLiteral("NODE_OPTIONS"),
-    QStringLiteral("RUBYOPT"),
-    QStringLiteral("PERL5OPT"),
-    QStringLiteral("PYTHONHOME"),
-    QStringLiteral("PYTHONPATH"),
-    QStringLiteral("BASH_ENV"),
-    QStringLiteral("ENV"),
-    QStringLiteral("SHELLOPTS"),
-    QStringLiteral("PS4"),
-};
 
-bool parseCommand(
+QString extractString(const QJsonObject &object, const QString &key)
+{
+    const QJsonValue value = object.value(key);
+    return value.isString() ? value.toString().trimmed() : QString();
+}
+
+bool parseArguments(
     const QJsonObject &paramsObject,
-    QString *program,
     QStringList *arguments,
     QString *error
 )
 {
-    if ( ( program == nullptr ) || ( arguments == nullptr ) )
+    if ( arguments == nullptr )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run internal error: command output pointer is null");
+            *error = QStringLiteral("process.exec internal error: arguments output pointer is null");
         }
         return false;
     }
 
-    program->clear();
     arguments->clear();
-
-    const QJsonValue commandValue = paramsObject.value(QStringLiteral("command"));
-    if ( commandValue.isUndefined() || commandValue.isNull() )
+    const QJsonValue argumentsValue = paramsObject.value(QStringLiteral("arguments"));
+    if ( argumentsValue.isUndefined() || argumentsValue.isNull() )
+    {
+        return true;
+    }
+    if ( !argumentsValue.isArray() )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run command is required");
+            *error = QStringLiteral("process.exec arguments must be string array");
         }
         return false;
     }
 
-    if ( !commandValue.isArray() )
+    const QJsonArray argumentsArray = argumentsValue.toArray();
+    for ( int i = 0; i < argumentsArray.size(); ++i )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run command must be string array");
-        }
-        return false;
-    }
-
-    const QJsonArray commandArray = commandValue.toArray();
-    if ( commandArray.isEmpty() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run command must not be empty");
-        }
-        return false;
-    }
-
-    for ( int i = 0; i < commandArray.size(); ++i )
-    {
-        const QJsonValue itemValue = commandArray.at(i);
-        if ( !itemValue.isString() )
+        const QJsonValue item = argumentsArray.at(i);
+        if ( !item.isString() )
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("system.run command[%1] must be string").arg(i);
+                *error = QStringLiteral("process.exec arguments[%1] must be string").arg(i);
             }
             return false;
         }
-
-        const QString itemText = itemValue.toString();
-        if ( i == 0 )
-        {
-            const QString parsedProgram = itemText.trimmed();
-            if ( parsedProgram.isEmpty() )
-            {
-                if ( error != nullptr )
-                {
-                    *error = QStringLiteral("system.run command[0] must not be empty");
-                }
-                return false;
-            }
-            *program = parsedProgram;
-            continue;
-        }
-        arguments->append(itemText);
+        arguments->append(item.toString());
     }
-
     return true;
 }
 
-bool parseRawCommand(
+bool parseOptionalBool(
     const QJsonObject &paramsObject,
-    QString *rawCommand,
+    const QString &field,
+    bool defaultValue,
+    bool *value,
     QString *error
 )
 {
-    if ( rawCommand == nullptr )
+    if ( value == nullptr )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run internal error: rawCommand output pointer is null");
+            *error = QStringLiteral("process.exec internal error: bool output pointer is null");
         }
         return false;
     }
 
-    rawCommand->clear();
-    const QJsonValue rawCommandValue = paramsObject.value(QStringLiteral("rawCommand"));
-    if ( rawCommandValue.isUndefined() || rawCommandValue.isNull() )
+    *value = defaultValue;
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() || rawValue.isNull() )
     {
         return true;
     }
-    if ( !rawCommandValue.isString() )
+    if ( !rawValue.isBool() )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run rawCommand must be string");
+            *error = QStringLiteral("process.exec %1 must be boolean").arg(field);
         }
         return false;
     }
 
-    *rawCommand = rawCommandValue.toString().trimmed();
-    return true;
-}
-
-bool parseNeedsScreenRecording(
-    const QJsonObject &paramsObject,
-    bool *needsScreenRecording,
-    QString *error
-)
-{
-    if ( needsScreenRecording == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: needsScreenRecording output pointer is null");
-        }
-        return false;
-    }
-
-    *needsScreenRecording = false;
-    const QJsonValue value = paramsObject.value(QStringLiteral("needsScreenRecording"));
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isBool() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run needsScreenRecording must be boolean");
-        }
-        return false;
-    }
-
-    *needsScreenRecording = value.toBool();
+    *value = rawValue.toBool();
     return true;
 }
 
@@ -196,7 +117,7 @@ bool parseTimeoutMs(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run internal error: timeout output pointer is null");
+            *error = QStringLiteral("process.exec internal error: timeout output pointer is null");
         }
         return false;
     }
@@ -207,12 +128,11 @@ bool parseTimeoutMs(
     {
         return true;
     }
-
     if ( !timeoutValue.isDouble() )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run timeoutMs must be number");
+            *error = QStringLiteral("process.exec timeoutMs must be number");
         }
         return false;
     }
@@ -223,7 +143,7 @@ bool parseTimeoutMs(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run timeoutMs is invalid");
+            *error = QStringLiteral("process.exec timeoutMs is invalid");
         }
         return false;
     }
@@ -233,7 +153,7 @@ bool parseTimeoutMs(
         if ( error != nullptr )
         {
             *error = QStringLiteral(
-                "system.run timeoutMs out of range [%1, %2]"
+                "process.exec timeoutMs out of range [%1, %2]"
             ).arg(processMinTimeoutMs).arg(processMaxTimeoutMs);
         }
         return false;
@@ -253,36 +173,50 @@ bool parseEnvironment(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run internal error: environment output pointer is null");
+            *error = QStringLiteral("process.exec internal error: environment output pointer is null");
         }
         return false;
     }
 
-    *environment = QProcessEnvironment::systemEnvironment();
-    const QJsonValue envValue = paramsObject.value(QStringLiteral("env"));
-    if ( envValue.isUndefined() || envValue.isNull() )
+    bool inheritEnvironment = true;
+    if ( !parseOptionalBool(
+            paramsObject,
+            QStringLiteral("inheritEnvironment"),
+            true,
+            &inheritEnvironment,
+            error
+        ) )
+    {
+        return false;
+    }
+
+    *environment = inheritEnvironment
+        ? QProcessEnvironment::systemEnvironment()
+        : QProcessEnvironment();
+
+    const QJsonValue environmentValue = paramsObject.value(QStringLiteral("environment"));
+    if ( environmentValue.isUndefined() || environmentValue.isNull() )
     {
         return true;
     }
-
-    if ( !envValue.isObject() )
+    if ( !environmentValue.isObject() )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run env must be object");
+            *error = QStringLiteral("process.exec environment must be object");
         }
         return false;
     }
 
-    const QJsonObject envObject = envValue.toObject();
-    for ( auto it = envObject.constBegin(); it != envObject.constEnd(); ++it )
+    const QJsonObject environmentObject = environmentValue.toObject();
+    for ( auto it = environmentObject.constBegin(); it != environmentObject.constEnd(); ++it )
     {
         const QString key = it.key().trimmed();
         if ( key.isEmpty() )
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("system.run env contains empty key");
+                *error = QStringLiteral("process.exec environment contains empty key");
             }
             return false;
         }
@@ -290,29 +224,12 @@ bool parseEnvironment(
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("system.run env key \"%1\" must be string value").arg(key);
+                *error = QStringLiteral("process.exec environment key \"%1\" must be string value").arg(key);
             }
             return false;
         }
-
-        const QString normalizedKey = key.toUpper();
-        if ( normalizedKey == QStringLiteral("PATH") )
-        {
-            qWarning().noquote() << QStringLiteral(
-                "[capability.system.run] ignore environment override key=%1"
-            ).arg(key);
-            continue;
-        }
-        if ( unsafeEnvironmentKeys.contains(normalizedKey) )
-        {
-            qWarning().noquote() << QStringLiteral(
-                "[capability.system.run] ignore unsafe environment key=%1"
-            ).arg(key);
-            continue;
-        }
         environment->insert(key, it.value().toString());
     }
-
     return true;
 }
 
@@ -320,25 +237,27 @@ bool parseExecuteRequest(
     const QJsonValue &params,
     QString *program,
     QStringList *arguments,
-    QString *rawCommand,
     QString *workingDirectory,
+    QByteArray *stdinBytes,
     int *timeoutMs,
-    bool *needsScreenRecording,
+    bool *detached,
+    bool *mergeChannels,
     QProcessEnvironment *environment,
     QString *error
 )
 {
     if ( ( program == nullptr ) ||
          ( arguments == nullptr ) ||
-         ( rawCommand == nullptr ) ||
          ( workingDirectory == nullptr ) ||
+         ( stdinBytes == nullptr ) ||
          ( timeoutMs == nullptr ) ||
-         ( needsScreenRecording == nullptr ) ||
+         ( detached == nullptr ) ||
+         ( mergeChannels == nullptr ) ||
          ( environment == nullptr ) )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run internal error: output pointer is null");
+            *error = QStringLiteral("process.exec internal error: output pointer is null");
         }
         return false;
     }
@@ -347,25 +266,62 @@ bool parseExecuteRequest(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run params must be object");
+            *error = QStringLiteral("process.exec params must be object");
         }
         return false;
     }
 
     const QJsonObject paramsObject = params.toObject();
-    if ( !parseCommand(paramsObject, program, arguments, error) )
+    const QString command = extractString(paramsObject, QStringLiteral("command"));
+    const QString programValue = extractString(paramsObject, QStringLiteral("program"));
+    if ( !command.isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral(
+                "process.exec command mode is not supported; use program and arguments"
+            );
+        }
+        return false;
+    }
+
+    arguments->clear();
+    if ( programValue.isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("process.exec requires program");
+        }
+        return false;
+    }
+
+    *program = programValue;
+    if ( !parseArguments(paramsObject, arguments, error) )
     {
         return false;
     }
-    if ( !parseRawCommand(paramsObject, rawCommand, error) )
+
+    *workingDirectory = extractString(paramsObject, QStringLiteral("workingDirectory"));
+
+    const QJsonValue stdinValue = paramsObject.value(QStringLiteral("stdin"));
+    if ( stdinValue.isUndefined() || stdinValue.isNull() )
     {
+        stdinBytes->clear();
+    }
+    else if ( stdinValue.isString() )
+    {
+        *stdinBytes = stdinValue.toString().toUtf8();
+    }
+    else
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("process.exec stdin must be string");
+        }
         return false;
     }
+
     if ( !parseTimeoutMs(paramsObject, timeoutMs, error) )
-    {
-        return false;
-    }
-    if ( !parseNeedsScreenRecording(paramsObject, needsScreenRecording, error) )
     {
         return false;
     }
@@ -373,23 +329,50 @@ bool parseExecuteRequest(
     {
         return false;
     }
-
-    const QJsonValue cwdValue = paramsObject.value(QStringLiteral("cwd"));
-    if ( cwdValue.isUndefined() || cwdValue.isNull() )
+    if ( !parseOptionalBool(
+            paramsObject,
+            QStringLiteral("detached"),
+            false,
+            detached,
+            error
+        ) )
     {
-        workingDirectory->clear();
-    }
-    else if ( cwdValue.isString() )
-    {
-        *workingDirectory = cwdValue.toString().trimmed();
-    }
-    else
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run cwd must be string");
-        }
         return false;
+    }
+
+    if ( !parseOptionalBool(
+            paramsObject,
+            QStringLiteral("mergeChannels"),
+            false,
+            mergeChannels,
+            error
+        ) )
+    {
+        return false;
+    }
+
+    if ( *detached )
+    {
+        if ( *mergeChannels )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "process.exec mergeChannels is not supported when detached is true"
+                );
+            }
+            return false;
+        }
+        if ( !stdinBytes->isEmpty() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "process.exec stdin is not supported when detached is true"
+                );
+            }
+            return false;
+        }
     }
 
     return true;
@@ -457,7 +440,7 @@ QString processResultClass(bool timedOut, QProcess::ExitStatus exitStatus, int e
 }
 }
 
-bool SystemRun::execute(
+bool ProcessExec::execute(
     const QJsonValue &params,
     int invokeTimeoutMs,
     QJsonObject *result,
@@ -474,27 +457,29 @@ bool SystemRun::execute(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run output pointer is null");
+            *error = QStringLiteral("process.exec output pointer is null");
         }
         return false;
     }
 
     QString program;
     QStringList arguments;
-    QString rawCommand;
     QString workingDirectory;
+    QByteArray stdinBytes;
     int timeoutMs = processDefaultTimeoutMs;
-    bool needsScreenRecording = false;
+    bool detached = false;
+    bool mergeChannels = false;
     QProcessEnvironment environment;
     QString parseError;
     if ( !parseExecuteRequest(
             params,
             &program,
             &arguments,
-            &rawCommand,
             &workingDirectory,
+            &stdinBytes,
             &timeoutMs,
-            &needsScreenRecording,
+            &detached,
+            &mergeChannels,
             &environment,
             &parseError
         ) )
@@ -510,24 +495,89 @@ bool SystemRun::execute(
         return false;
     }
 
-    if ( invokeTimeoutMs >= 0 )
+    if ( ( !detached ) && ( invokeTimeoutMs >= 0 ) )
     {
         timeoutMs = qMin(timeoutMs, invokeTimeoutMs);
     }
 
     qInfo().noquote() << QStringLiteral(
-        "[capability.system.run] start program=%1 args=%2 timeoutMs=%3 workingDirectory=%4 rawCommand=%5 needsScreenRecording=%6"
+        "[capability.process.exec] start program=%1 args=%2 timeoutMs=%3 detached=%4 workingDirectory=%5"
     ).arg(
         program,
         arguments.join(' '),
         QString::number(timeoutMs),
-        workingDirectory,
-        rawCommand,
-        needsScreenRecording ? QStringLiteral("true") : QStringLiteral("false")
+        detached ? QStringLiteral("true") : QStringLiteral("false"),
+        workingDirectory
     );
+
+    if ( detached )
+    {
+        QElapsedTimer timer;
+        timer.start();
+
+        QProcess process;
+        process.setProcessEnvironment(environment);
+        if ( !workingDirectory.isEmpty() )
+        {
+            process.setWorkingDirectory(workingDirectory);
+        }
+        process.setProgram(program);
+        process.setArguments(arguments);
+
+        qint64 detachedPid = 0;
+        const bool detachedStarted = process.startDetached(&detachedPid);
+        if ( !detachedStarted )
+        {
+            const QString startError = process.errorString().trimmed();
+            if ( error != nullptr )
+            {
+                *error = startError.isEmpty()
+                    ? QStringLiteral("process.exec failed to start detached process")
+                    : QStringLiteral("process.exec failed to start detached process: %1")
+                          .arg(startError);
+            }
+            qWarning().noquote() << QStringLiteral(
+                "[capability.process.exec] failed to start detached program=%1 error=%2"
+            ).arg(program, startError);
+            return false;
+        }
+
+        QJsonObject out;
+        out.insert(QStringLiteral("program"), program);
+        out.insert(QStringLiteral("arguments"), toJsonArray(arguments));
+        out.insert(QStringLiteral("workingDirectory"), workingDirectory);
+        out.insert(QStringLiteral("timeoutMs"), timeoutMs);
+        out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
+        out.insert(QStringLiteral("detached"), true);
+        if ( detachedPid > 0 )
+        {
+            out.insert(QStringLiteral("pid"), static_cast<double>(detachedPid));
+        }
+        out.insert(QStringLiteral("timedOut"), false);
+        out.insert(QStringLiteral("exitCode"), -1);
+        out.insert(QStringLiteral("exitStatus"), QStringLiteral("detached"));
+        out.insert(QStringLiteral("stdout"), QString());
+        out.insert(QStringLiteral("stderr"), QString());
+        out.insert(QStringLiteral("ok"), true);
+        out.insert(QStringLiteral("resultClass"), QStringLiteral("detached"));
+
+        *result = out;
+        qInfo().noquote() << QStringLiteral(
+            "[capability.process.exec] detached program=%1 pid=%2 elapsedMs=%3"
+        ).arg(
+            program,
+            detachedPid > 0 ? QString::number(detachedPid) : QStringLiteral("unknown"),
+            QString::number(timer.elapsed())
+        );
+        return true;
+    }
 
     QProcess process;
     process.setProcessEnvironment(environment);
+    if ( mergeChannels )
+    {
+        process.setProcessChannelMode(QProcess::MergedChannels);
+    }
     if ( !workingDirectory.isEmpty() )
     {
         process.setWorkingDirectory(workingDirectory);
@@ -542,14 +592,20 @@ bool SystemRun::execute(
         if ( error != nullptr )
         {
             *error = startError.isEmpty()
-                ? QStringLiteral("system.run failed to start process")
-                : QStringLiteral("system.run failed to start process: %1").arg(startError);
+                ? QStringLiteral("process.exec failed to start process")
+                : QStringLiteral("process.exec failed to start process: %1").arg(startError);
         }
         qWarning().noquote() << QStringLiteral(
-            "[capability.system.run] failed to start program=%1 error=%2"
+            "[capability.process.exec] failed to start program=%1 error=%2"
         ).arg(program, startError);
         return false;
     }
+
+    if ( !stdinBytes.isEmpty() )
+    {
+        process.write(stdinBytes);
+    }
+    process.closeWriteChannel();
 
     const bool finishedWithinTimeout = process.waitForFinished(timeoutMs);
     const bool timedOut = !finishedWithinTimeout;
@@ -571,12 +627,10 @@ bool SystemRun::execute(
     QJsonObject out;
     out.insert(QStringLiteral("program"), program);
     out.insert(QStringLiteral("arguments"), toJsonArray(arguments));
-    out.insert(QStringLiteral("rawCommand"), rawCommand);
     out.insert(QStringLiteral("workingDirectory"), workingDirectory);
     out.insert(QStringLiteral("timeoutMs"), timeoutMs);
     out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
     out.insert(QStringLiteral("detached"), false);
-    out.insert(QStringLiteral("needsScreenRecording"), needsScreenRecording);
     out.insert(QStringLiteral("timedOut"), timedOut);
     out.insert(QStringLiteral("exitCode"), exitCode);
     out.insert(
@@ -596,7 +650,7 @@ bool SystemRun::execute(
 
     *result = out;
     qInfo().noquote() << QStringLiteral(
-        "[capability.system.run] done program=%1 exitCode=%2 timedOut=%3 elapsedMs=%4"
+        "[capability.process.exec] done program=%1 exitCode=%2 timedOut=%3 elapsedMs=%4"
     ).arg(
         program,
         QString::number(process.exitCode()),
