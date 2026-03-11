@@ -127,6 +127,48 @@ JQPane {
                 titleText: qsTr("文件服务URL")
                 titleWidth: 170
                 textFieldWidth: parent.width - 170 - 24
+
+                Item {
+                    width: 8
+                    height: 1
+                }
+
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 24
+                    height: 24
+                    radius: 12
+                    color: "transparent"
+                    border.width: 1
+                    border.color: "#2563eb"
+
+                    Text {
+                        id: fileServerDocHintText
+                        anchors.centerIn: parent
+                        text: "?"
+                        font.pixelSize: 16
+                        font.bold: true
+                        color: "#2563eb"
+                    }
+
+                    Rectangle {
+                        width: parent.width + 4
+                        height: 1
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: -2
+                        color: "#2563eb"
+                        visible: fileServerDocHintMouseArea.containsMouse
+                    }
+
+                    MouseArea {
+                        id: fileServerDocHintMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Qt.openUrlExternally("https://github.com/188080501/JQOpenClaw/blob/master/docs/Nginx%E4%BE%9D%E8%B5%96.md")
+                    }
+                }
             }
 
             JQSettingsTextField {
