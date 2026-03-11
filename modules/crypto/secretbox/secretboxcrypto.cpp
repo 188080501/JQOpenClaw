@@ -2,28 +2,17 @@
 #include "crypto/secretbox/secretboxcrypto.h"
 
 // OpenSSL lib import
-#include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
+
+// JQOpenClaw import
+#include "common/common.h"
 
 namespace
 {
 constexpr int secretBoxKeyBytes = 32;
 constexpr int secretBoxNonceBytes = 12;
 constexpr int secretBoxTagBytes = 16;
-
-QString lastOpenSslError()
-{
-    const unsigned long errorCode = ERR_get_error();
-    if ( errorCode == 0UL )
-    {
-        return QStringLiteral("unknown OpenSSL error");
-    }
-
-    char buffer[256] = {0};
-    ERR_error_string_n(errorCode, buffer, sizeof(buffer));
-    return QString::fromLatin1(buffer);
-}
 }
 
 QByteArray SecretBoxCrypto::generateKey()
@@ -70,7 +59,7 @@ bool SecretBoxCrypto::encrypt(
         {
             *error = QStringLiteral(
                 "failed to generate nonce: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -102,7 +91,7 @@ bool SecretBoxCrypto::encrypt(
         {
             *error = QStringLiteral(
                 "failed to initialize secretbox encryptor: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -123,7 +112,7 @@ bool SecretBoxCrypto::encrypt(
         {
             *error = QStringLiteral(
                 "secretbox encryption failed: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -141,7 +130,7 @@ bool SecretBoxCrypto::encrypt(
         {
             *error = QStringLiteral(
                 "secretbox encryption finalize failed: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -160,7 +149,7 @@ bool SecretBoxCrypto::encrypt(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("secretbox tag extraction failed: %1").arg(lastOpenSslError());
+            *error = QStringLiteral("secretbox tag extraction failed: %1").arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -244,7 +233,7 @@ bool SecretBoxCrypto::decrypt(
         {
             *error = QStringLiteral(
                 "failed to initialize secretbox decryptor: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -264,7 +253,7 @@ bool SecretBoxCrypto::decrypt(
         plainText->clear();
         if ( error != nullptr )
         {
-            *error = QStringLiteral("secretbox decryption failed: %1").arg(lastOpenSslError());
+            *error = QStringLiteral("secretbox decryption failed: %1").arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -283,7 +272,7 @@ bool SecretBoxCrypto::decrypt(
         plainText->clear();
         if ( error != nullptr )
         {
-            *error = QStringLiteral("failed to set secretbox auth tag: %1").arg(lastOpenSslError());
+            *error = QStringLiteral("failed to set secretbox auth tag: %1").arg(Common::lastOpenSslError());
         }
         return false;
     }

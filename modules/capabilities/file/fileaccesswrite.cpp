@@ -23,11 +23,6 @@ enum class ContentEncoding
 
 const qint64 maxWriteBytes = 64 * 1024 * 1024;
 
-Qt::CaseSensitivity pathCaseSensitivity()
-{
-    return Common::pathCaseSensitivity();
-}
-
 enum class FileWriteOperation
 {
     Write,
@@ -36,11 +31,6 @@ enum class FileWriteOperation
     MakeDir,
     RemoveDir,
 };
-QString normalizeToken(const QString &value)
-{
-    return Common::normalizeToken(value);
-}
-
 bool parseEncoding(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -124,7 +114,7 @@ bool parseWriteOperation(
         return false;
     }
 
-    const QString normalized = normalizeToken(value.toString());
+    const QString normalized = Common::normalizeToken(value.toString());
     if ( normalized.isEmpty() )
     {
         if ( error != nullptr )
@@ -170,22 +160,6 @@ bool parseWriteOperation(
         *error = QStringLiteral("operation must be write, move/cut, delete/remove, mkdir/createDir, or rmdir/removeDir");
     }
     return false;
-}
-bool parseOptionalBool(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    bool defaultValue,
-    bool *out,
-    QString *error
-)
-{
-    return Common::parseOptionalBool(
-        paramsObject,
-        field,
-        defaultValue,
-        out,
-        error
-    );
 }
 bool decodeContent(
     const QString &content,
@@ -255,7 +229,7 @@ bool isSameOrChildPath(const QString &candidatePath, const QString &parentPath)
 {
     const QString normalizedCandidate = normalizeAbsolutePathForCompare(candidatePath);
     const QString normalizedParent = normalizeAbsolutePathForCompare(parentPath);
-    const Qt::CaseSensitivity caseSensitivity = pathCaseSensitivity();
+    const Qt::CaseSensitivity caseSensitivity = Common::pathCaseSensitivity();
 
     if ( normalizedCandidate.compare(normalizedParent, caseSensitivity) == 0 )
     {
@@ -488,7 +462,7 @@ bool FileWriteAccess::write(
 
     QString parseError;
     bool allowWrite = false;
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("allowWrite"),
             false,
@@ -569,7 +543,7 @@ bool FileWriteAccess::write(
         const QFileInfo destinationInfo(destinationPath);
         const QString sourceAbsolutePath = sourceInfo.absoluteFilePath();
         const QString destinationAbsolutePath = destinationInfo.absoluteFilePath();
-        if ( sourceAbsolutePath.compare(destinationAbsolutePath, pathCaseSensitivity()) == 0 )
+        if ( sourceAbsolutePath.compare(destinationAbsolutePath, Common::pathCaseSensitivity()) == 0 )
         {
             if ( invalidParams != nullptr )
             {
@@ -598,7 +572,7 @@ bool FileWriteAccess::write(
         }
 
         bool createDirs = true;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("createDirs"),
                 true,
@@ -618,7 +592,7 @@ bool FileWriteAccess::write(
         }
 
         bool overwrite = false;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("overwrite"),
                 false,
@@ -834,7 +808,7 @@ bool FileWriteAccess::write(
     if ( operation == FileWriteOperation::MakeDir )
     {
         bool createDirs = true;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("createDirs"),
                 true,
@@ -1022,7 +996,7 @@ bool FileWriteAccess::write(
     }
 
     bool append = false;
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("append"),
             false,
@@ -1042,7 +1016,7 @@ bool FileWriteAccess::write(
     }
 
     bool createDirs = true;
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("createDirs"),
             true,

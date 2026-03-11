@@ -37,11 +37,6 @@ const int readRgStartTimeoutMs = 5000;
 const int readRgTimeoutMs = 60000;
 const int readRgKillWaitTimeoutMs = 3000;
 
-Qt::CaseSensitivity pathCaseSensitivity()
-{
-    return Common::pathCaseSensitivity();
-}
-
 QDir::SortFlags entryNameSortFlags()
 {
     QDir::SortFlags sortFlags = QDir::DirsFirst | QDir::Name;
@@ -241,11 +236,6 @@ enum class FileReadOperation
     Md5,
 };
 
-QString normalizeToken(const QString &value)
-{
-    return Common::normalizeToken(value);
-}
-
 bool parseEncoding(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -330,7 +320,7 @@ bool parseReadOperation(
         return false;
     }
 
-    const QString normalized = normalizeToken(value.toString());
+    const QString normalized = Common::normalizeToken(value.toString());
     if ( normalized.isEmpty() )
     {
         if ( error != nullptr )
@@ -378,23 +368,6 @@ bool parseReadOperation(
     }
     return false;
 }
-bool parseOptionalBool(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    bool defaultValue,
-    bool *out,
-    QString *error
-)
-{
-    return Common::parseOptionalBool(
-        paramsObject,
-        field,
-        defaultValue,
-        out,
-        error
-    );
-}
-
 bool parseIntegerField(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -1152,7 +1125,7 @@ bool FileReadAccess::read(
         }
 
         bool includeEntries = true;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("includeEntries"),
                 true,
@@ -1172,7 +1145,7 @@ bool FileReadAccess::read(
         }
 
         bool recursive = false;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("recursive"),
                 false,
@@ -1192,7 +1165,7 @@ bool FileReadAccess::read(
         }
 
         bool includeHidden = true;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("includeHidden"),
                 true,
@@ -1279,7 +1252,7 @@ bool FileReadAccess::read(
                     return QString::compare(
                         a.absoluteFilePath(),
                         b.absoluteFilePath(),
-                        pathCaseSensitivity()
+                        Common::pathCaseSensitivity()
                     ) < 0;
                 }
             );
@@ -1652,7 +1625,7 @@ bool FileReadAccess::read(
         }
 
         bool caseSensitive = false;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("caseSensitive"),
                 false,
@@ -1672,7 +1645,7 @@ bool FileReadAccess::read(
         }
 
         bool includeHidden = false;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("includeHidden"),
                 false,
@@ -1692,7 +1665,7 @@ bool FileReadAccess::read(
         }
 
         bool literal = false;
-        if ( !parseOptionalBool(
+        if ( !Common::parseOptionalBool(
                 paramsObject,
                 QStringLiteral("literal"),
                 false,

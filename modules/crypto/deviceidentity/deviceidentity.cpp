@@ -14,10 +14,10 @@
 #include <QStandardPaths>
 
 // OpenSSL lib import
-#include <openssl/err.h>
 #include <openssl/evp.h>
 
 // JQOpenClaw import
+#include "common/common.h"
 #include "crypto/cryptoencoding.h"
 #include "crypto/signing/deviceauth.h"
 
@@ -31,19 +31,6 @@ QString defaultIdentityPath()
         basePath = QDir::homePath() + "/.jqopenclaw";
     }
     return basePath + "/identity/device.json";
-}
-
-QString lastOpenSslError()
-{
-    const unsigned long errorCode = ERR_get_error();
-    if ( errorCode == 0UL )
-    {
-        return QStringLiteral("unknown OpenSSL error");
-    }
-
-    char buffer[256] = {0};
-    ERR_error_string_n(errorCode, buffer, sizeof(buffer));
-    return QString::fromLatin1(buffer);
 }
 
 bool generateEd25519KeyPair(
@@ -69,7 +56,7 @@ bool generateEd25519KeyPair(
         {
             *error = QStringLiteral(
                 "failed to create Ed25519 key context: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -81,7 +68,7 @@ bool generateEd25519KeyPair(
         {
             *error = QStringLiteral(
                 "failed to initialize Ed25519 key generation: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -96,7 +83,7 @@ bool generateEd25519KeyPair(
         {
             *error = QStringLiteral(
                 "failed to generate Ed25519 key pair: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -129,7 +116,7 @@ bool generateEd25519KeyPair(
         {
             *error = QStringLiteral(
                 "failed to export Ed25519 key pair: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }

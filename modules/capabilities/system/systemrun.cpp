@@ -398,30 +398,6 @@ bool parseExecuteRequest(
     return true;
 }
 
-QJsonArray toJsonArray(const QStringList &items)
-{
-    return Common::toJsonArray(items);
-}
-
-QString processExitStatusName(QProcess::ExitStatus exitStatus)
-{
-    return Common::processExitStatusName(exitStatus);
-}
-
-QString processErrorName(QProcess::ProcessError processError)
-{
-    return Common::processErrorName(processError);
-}
-
-bool hasProcessError(QProcess::ProcessError processError)
-{
-    return Common::hasProcessError(processError);
-}
-
-QString processResultClass(bool timedOut, QProcess::ExitStatus exitStatus, int exitCode)
-{
-    return Common::processResultClass(timedOut, exitStatus, exitCode);
-}
 }
 
 bool SystemRun::execute(
@@ -531,13 +507,13 @@ bool SystemRun::execute(
     const QProcess::ExitStatus exitStatus = process.exitStatus();
     const int exitCode = process.exitCode();
     const QProcess::ProcessError processError = process.error();
-    const bool processHasError = hasProcessError(processError);
-    const QString resultClass = processResultClass(timedOut, exitStatus, exitCode);
+    const bool processHasError = Common::hasProcessError(processError);
+    const QString resultClass = Common::processResultClass(timedOut, exitStatus, exitCode);
     const bool ok = ( resultClass == QStringLiteral("ok") );
 
     QJsonObject out;
     out.insert(QStringLiteral("program"), program);
-    out.insert(QStringLiteral("arguments"), toJsonArray(arguments));
+    out.insert(QStringLiteral("arguments"), Common::toJsonArray(arguments));
     out.insert(QStringLiteral("rawCommand"), rawCommand);
     out.insert(QStringLiteral("workingDirectory"), workingDirectory);
     out.insert(QStringLiteral("timeoutMs"), timeoutMs);
@@ -548,7 +524,7 @@ bool SystemRun::execute(
     out.insert(QStringLiteral("exitCode"), exitCode);
     out.insert(
         QStringLiteral("exitStatus"),
-        processExitStatusName(exitStatus)
+        Common::processExitStatusName(exitStatus)
     );
     out.insert(QStringLiteral("stdout"), QString::fromLocal8Bit(stdoutBytes));
     out.insert(QStringLiteral("stderr"), QString::fromLocal8Bit(stderrBytes));
@@ -557,7 +533,7 @@ bool SystemRun::execute(
     if ( processHasError )
     {
         out.insert(QStringLiteral("processError"), static_cast<int>(processError));
-        out.insert(QStringLiteral("processErrorName"), processErrorName(processError));
+        out.insert(QStringLiteral("processErrorName"), Common::processErrorName(processError));
         out.insert(QStringLiteral("processErrorString"), process.errorString().trimmed());
     }
 

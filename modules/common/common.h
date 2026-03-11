@@ -43,6 +43,8 @@ bool calculateFileMd5Hex(
     const QString &errorScope
 );
 
+QString lastOpenSslError();
+
 bool parseEncoding(
     const QJsonObject &paramsObject,
     const QString &field,

@@ -73,11 +73,6 @@ QStringList uniquePaths(const QStringList &paths)
     return out;
 }
 
-QJsonArray toJsonArray(const QStringList &items)
-{
-    return Common::toJsonArray(items);
-}
-
 QStringList splitLines(const QByteArray &bytes)
 {
     QString output = QString::fromLocal8Bit(bytes);
@@ -281,7 +276,7 @@ QJsonObject buildItem(
     out.insert(QStringLiteral("program"), program);
     out.insert(QStringLiteral("backend"), backend);
     out.insert(QStringLiteral("found"), !paths.isEmpty());
-    out.insert(QStringLiteral("allPaths"), toJsonArray(paths));
+    out.insert(QStringLiteral("allPaths"), Common::toJsonArray(paths));
     if ( !paths.isEmpty() )
     {
         out.insert(QStringLiteral("path"), paths.first());

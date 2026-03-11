@@ -3,26 +3,14 @@
 
 // OpenSSL lib import
 #include <openssl/crypto.h>
-#include <openssl/err.h>
 #include <openssl/evp.h>
 
 // JQOpenClaw import
+#include "common/common.h"
 #include "crypto/cryptoencoding.h"
 
 namespace
 {
-QString lastOpenSslError()
-{
-    const unsigned long errorCode = ERR_get_error();
-    if ( errorCode == 0UL )
-    {
-        return QStringLiteral("unknown OpenSSL error");
-    }
-
-    char buffer[256] = {0};
-    ERR_error_string_n(errorCode, buffer, sizeof(buffer));
-    return QString::fromLatin1(buffer);
-}
 }
 
 bool DeviceAuth::initialize(QString *error)
@@ -31,7 +19,7 @@ bool DeviceAuth::initialize(QString *error)
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("OpenSSL initialization failed: %1").arg(lastOpenSslError());
+            *error = QStringLiteral("OpenSSL initialization failed: %1").arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -130,7 +118,7 @@ bool DeviceAuth::signDetached(
         {
             *error = QStringLiteral(
                 "failed to create Ed25519 private key: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -155,7 +143,7 @@ bool DeviceAuth::signDetached(
         {
             *error = QStringLiteral(
                 "failed to initialize Ed25519 signer: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }
@@ -180,7 +168,7 @@ bool DeviceAuth::signDetached(
         {
             *error = QStringLiteral(
                 "failed to sign device auth payload: %1"
-            ).arg(lastOpenSslError());
+            ).arg(Common::lastOpenSslError());
         }
         return false;
     }

@@ -6,6 +6,9 @@
 #include <QFile>
 #include <QJsonValue>
 
+// OpenSSL lib import
+#include <openssl/err.h>
+
 QJsonArray Common::toJsonArray(const QStringList &items)
 {
     QJsonArray out;
@@ -161,6 +164,19 @@ bool Common::calculateFileMd5Hex(
 
     *md5Hex = QString::fromLatin1(md5.result().toHex()).toLower();
     return true;
+}
+
+QString Common::lastOpenSslError()
+{
+    const unsigned long errorCode = ERR_get_error();
+    if ( errorCode == 0UL )
+    {
+        return QStringLiteral("unknown OpenSSL error");
+    }
+
+    char buffer[256] = {0};
+    ERR_error_string_n(errorCode, buffer, sizeof(buffer));
+    return QString::fromLatin1(buffer);
 }
 
 bool Common::parseEncoding(
