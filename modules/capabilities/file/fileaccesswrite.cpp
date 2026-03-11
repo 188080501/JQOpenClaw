@@ -10,6 +10,9 @@
 #include <QJsonObject>
 #include <QtGlobal>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 namespace
 {
 enum class ContentEncoding
@@ -22,12 +25,7 @@ const qint64 maxWriteBytes = 64 * 1024 * 1024;
 
 Qt::CaseSensitivity pathCaseSensitivity()
 {
-#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
-    // Keep path comparisons aligned with default Windows/macOS filesystems.
-    return Qt::CaseInsensitive;
-#else
-    return Qt::CaseSensitive;
-#endif
+    return Common::pathCaseSensitivity();
 }
 
 enum class FileWriteOperation
@@ -46,11 +44,7 @@ QString extractString(const QJsonObject &object, const QString &key)
 
 QString normalizeToken(const QString &value)
 {
-    QString normalized = value.trimmed().toLower();
-    normalized.remove('-');
-    normalized.remove('_');
-    normalized.remove(' ');
-    return normalized;
+    return Common::normalizeToken(value);
 }
 
 bool parseEncoding(
@@ -62,45 +56,30 @@ bool parseEncoding(
 {
     if ( encoding == nullptr )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file capability internal error: encoding output pointer is null");
-        }
+        return Common::parseEncoding(
+            paramsObject,
+            field,
+            nullptr,
+            error
+        );
+    }
+
+    Common::ContentEncoding commonEncoding = Common::ContentEncoding::Utf8;
+    const bool ok = Common::parseEncoding(
+        paramsObject,
+        field,
+        &commonEncoding,
+        error
+    );
+    if ( !ok )
+    {
         return false;
     }
 
-    *encoding = ContentEncoding::Utf8;
-    const QJsonValue value = paramsObject.value(field);
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isString() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("%1 must be string").arg(field);
-        }
-        return false;
-    }
-
-    const QString normalized = normalizeToken(value.toString());
-    if ( normalized.isEmpty() || ( normalized == QStringLiteral("utf8") ) )
-    {
-        *encoding = ContentEncoding::Utf8;
-        return true;
-    }
-    if ( normalized == QStringLiteral("base64") )
-    {
-        *encoding = ContentEncoding::Base64;
-        return true;
-    }
-
-    if ( error != nullptr )
-    {
-        *error = QStringLiteral("%1 must be utf8 or base64").arg(field);
-    }
-    return false;
+    *encoding = ( commonEncoding == Common::ContentEncoding::Base64 )
+        ? ContentEncoding::Base64
+        : ContentEncoding::Utf8;
+    return true;
 }
 
 QString fileWriteOperationName(FileWriteOperation operation)
@@ -206,32 +185,13 @@ bool parseOptionalBool(
     QString *error
 )
 {
-    if ( out == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file capability internal error: bool output pointer is null");
-        }
-        return false;
-    }
-
-    *out = defaultValue;
-    const QJsonValue value = paramsObject.value(field);
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isBool() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("%1 must be boolean").arg(field);
-        }
-        return false;
-    }
-
-    *out = value.toBool();
-    return true;
+    return Common::parseOptionalBool(
+        paramsObject,
+        field,
+        defaultValue,
+        out,
+        error
+    );
 }
 bool decodeContent(
     const QString &content,
@@ -280,11 +240,11 @@ bool decodeContent(
 
 QString encodingName(ContentEncoding encoding)
 {
-    if ( encoding == ContentEncoding::Base64 )
-    {
-        return QStringLiteral("base64");
-    }
-    return QStringLiteral("utf8");
+    return Common::encodingName(
+        ( encoding == ContentEncoding::Base64 )
+            ? Common::ContentEncoding::Base64
+            : Common::ContentEncoding::Utf8
+    );
 }
 
 QString normalizeAbsolutePathForCompare(const QString &absolutePath)

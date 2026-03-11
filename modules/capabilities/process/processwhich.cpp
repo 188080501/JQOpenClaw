@@ -12,6 +12,9 @@
 #include <QStringList>
 #include <QtGlobal>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 namespace
 {
 const int processWhichStartTimeoutMs = 3000;
@@ -72,12 +75,7 @@ QStringList uniquePaths(const QStringList &paths)
 
 QJsonArray toJsonArray(const QStringList &items)
 {
-    QJsonArray out;
-    for ( const QString &item : items )
-    {
-        out.append(item);
-    }
-    return out;
+    return Common::toJsonArray(items);
 }
 
 QStringList splitLines(const QByteArray &bytes)

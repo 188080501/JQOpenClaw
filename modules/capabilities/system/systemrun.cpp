@@ -11,6 +11,9 @@
 #include <QStringList>
 #include <QtGlobal>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 namespace
 {
 const int processStartTimeoutMs = 5000;
@@ -397,63 +400,27 @@ bool parseExecuteRequest(
 
 QJsonArray toJsonArray(const QStringList &items)
 {
-    QJsonArray out;
-    for ( const QString &item : items )
-    {
-        out.append(item);
-    }
-    return out;
+    return Common::toJsonArray(items);
 }
 
 QString processExitStatusName(QProcess::ExitStatus exitStatus)
 {
-    if ( exitStatus == QProcess::NormalExit )
-    {
-        return QStringLiteral("normal");
-    }
-    return QStringLiteral("crash");
+    return Common::processExitStatusName(exitStatus);
 }
 
 QString processErrorName(QProcess::ProcessError processError)
 {
-    switch ( processError )
-    {
-    case QProcess::FailedToStart:
-        return QStringLiteral("failed_to_start");
-    case QProcess::Crashed:
-        return QStringLiteral("crashed");
-    case QProcess::Timedout:
-        return QStringLiteral("timed_out");
-    case QProcess::ReadError:
-        return QStringLiteral("read_error");
-    case QProcess::WriteError:
-        return QStringLiteral("write_error");
-    case QProcess::UnknownError:
-        return QStringLiteral("unknown");
-    }
-    return QStringLiteral("unknown");
+    return Common::processErrorName(processError);
 }
 
 bool hasProcessError(QProcess::ProcessError processError)
 {
-    return processError != QProcess::UnknownError;
+    return Common::hasProcessError(processError);
 }
 
 QString processResultClass(bool timedOut, QProcess::ExitStatus exitStatus, int exitCode)
 {
-    if ( timedOut )
-    {
-        return QStringLiteral("timeout");
-    }
-    if ( exitStatus != QProcess::NormalExit )
-    {
-        return QStringLiteral("crash");
-    }
-    if ( exitCode != 0 )
-    {
-        return QStringLiteral("non_zero_exit");
-    }
-    return QStringLiteral("ok");
+    return Common::processResultClass(timedOut, exitStatus, exitCode);
 }
 }
 
