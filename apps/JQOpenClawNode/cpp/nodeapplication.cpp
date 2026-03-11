@@ -54,14 +54,13 @@
 
 namespace
 {
-constexpr int kPairingReconnectIntervalMs = 15000;
-constexpr int kInvokeIdempotencyCacheMaxEntries = 256;
-constexpr qint64 kInvokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
-constexpr int kInvokeHistoryMaxEntries = 10;
-constexpr int kScreenshotUploadTimeoutMs = 30000;
-// Internal-only delay before process exit after self-update response is sent.
-constexpr int kSelfUpdateExitDelayMs = 200;
-constexpr auto kDefaultGatewayUrl = "ws://127.0.0.1:18789";
+constexpr int pairingReconnectIntervalMs = 15000;
+constexpr int invokeIdempotencyCacheMaxEntries = 256;
+constexpr qint64 invokeIdempotencyCacheTtlMs = 10LL * 60LL * 1000LL;
+constexpr int invokeHistoryMaxEntries = 10;
+constexpr int screenshotUploadTimeoutMs = 30000;
+constexpr int selfUpdateExitDelayMs = 200;
+constexpr auto defaultGatewayUrl = "ws://127.0.0.1:18789";
 
 QString startupCommandLine()
 {
@@ -445,7 +444,7 @@ bool uploadScreenshotFile(
         }
     );
     QObject::connect(reply, &QNetworkReply::finished, &eventLoop, &QEventLoop::quit);
-    timeoutTimer.start(kScreenshotUploadTimeoutMs);
+    timeoutTimer.start(screenshotUploadTimeoutMs);
     eventLoop.exec();
     timeoutTimer.stop();
 
@@ -455,7 +454,7 @@ bool uploadScreenshotFile(
         if ( error != nullptr )
         {
             *error = QStringLiteral("file upload timed out after %1ms")
-                .arg(QString::number(kScreenshotUploadTimeoutMs));
+                .arg(QString::number(screenshotUploadTimeoutMs));
         }
         return false;
     }
@@ -580,7 +579,7 @@ NodeApplication::NodeApplication(
 {
     startupTime_ = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
 
-    pairingReconnectTimer_.setInterval(kPairingReconnectIntervalMs);
+    pairingReconnectTimer_.setInterval(pairingReconnectIntervalMs);
     pairingReconnectTimer_.setSingleShot(false);
 
     connect(
@@ -787,7 +786,7 @@ QString NodeApplication::generateDefaultDisplayName()
 QJsonObject NodeApplication::defaultConfig()
 {
     QJsonObject config;
-    config.insert(QStringLiteral("gatewayUrl"), QString::fromLatin1(kDefaultGatewayUrl));
+    config.insert(QStringLiteral("gatewayUrl"), QString::fromLatin1(defaultGatewayUrl));
     config.insert(QStringLiteral("token"), QString());
     config.insert(QStringLiteral("followSystemStartup"), false);
     config.insert(QStringLiteral("silentStartup"), false);
@@ -1577,7 +1576,7 @@ void NodeApplication::appendInvokeHistoryEntry(
             : capability.trimmed()
     );
     nextHistory.prepend(historyEntry);
-    while ( nextHistory.size() > kInvokeHistoryMaxEntries )
+    while ( nextHistory.size() > invokeHistoryMaxEntries )
     {
         nextHistory.removeLast();
     }
@@ -1712,7 +1711,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
                 continue;
             }
 
-            if ( ( nowMs - cacheIter->updatedAtMs ) <= kInvokeIdempotencyCacheTtlMs )
+            if ( ( nowMs - cacheIter->updatedAtMs ) <= invokeIdempotencyCacheTtlMs )
             {
                 continue;
             }
@@ -1721,7 +1720,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
             invokeIdempotencyCacheOrder_.removeAt(index);
         }
 
-        while ( invokeIdempotencyCache_.size() > kInvokeIdempotencyCacheMaxEntries )
+        while ( invokeIdempotencyCache_.size() > invokeIdempotencyCacheMaxEntries )
         {
             int removeIndex = -1;
             for ( int index = 0; index < invokeIdempotencyCacheOrder_.size(); ++index )
@@ -1951,9 +1950,9 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
         {
             qInfo().noquote() << QStringLiteral(
                 "[node.selfUpdate] invoke response sent, exit in %1ms"
-            ).arg(QString::number(kSelfUpdateExitDelayMs));
+            ).arg(QString::number(selfUpdateExitDelayMs));
             QTimer::singleShot(
-                kSelfUpdateExitDelayMs,
+                selfUpdateExitDelayMs,
                 this,
                 [this]()
                 {
@@ -2083,7 +2082,7 @@ void NodeApplication::onPairingReconnectTimeout()
 
     qInfo().noquote() << QStringLiteral(
         "pairing reconnect tick, retry gateway connection in %1 ms"
-    ).arg(kPairingReconnectIntervalMs);
+    ).arg(pairingReconnectIntervalMs);
     gatewayClient_.close();
     QTimer::singleShot(
         200,
@@ -2110,7 +2109,7 @@ void NodeApplication::startPairingReconnect()
     pairingReconnectTimer_.start();
     qInfo().noquote() << QStringLiteral(
         "pairing reconnect timer started, interval=%1 ms"
-    ).arg(kPairingReconnectIntervalMs);
+    ).arg(pairingReconnectIntervalMs);
 }
 
 void NodeApplication::stopPairingReconnect()
