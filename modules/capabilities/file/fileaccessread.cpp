@@ -3,7 +3,6 @@
 
 // Qt lib import
 #include <QByteArray>
-#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
@@ -242,61 +241,9 @@ enum class FileReadOperation
     Md5,
 };
 
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString().trimmed() : QString();
-}
-
 QString normalizeToken(const QString &value)
 {
     return Common::normalizeToken(value);
-}
-
-bool calculateFileMd5Hex(
-    const QString &path,
-    QString *md5Hex,
-    QString *error
-)
-{
-    if ( md5Hex == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file.read md5 output pointer is null");
-        }
-        return false;
-    }
-
-    QFile file(path);
-    if ( !file.open(QIODevice::ReadOnly) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file.read open failed: %1")
-                .arg(file.errorString().trimmed());
-        }
-        return false;
-    }
-
-    QCryptographicHash md5(QCryptographicHash::Md5);
-    while ( !file.atEnd() )
-    {
-        const QByteArray block = file.read(64 * 1024);
-        if ( block.isEmpty() && ( file.error() != QFile::NoError ) )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.read read failed: %1")
-                    .arg(file.errorString().trimmed());
-            }
-            return false;
-        }
-        md5.addData(block);
-    }
-
-    *md5Hex = QString::fromLatin1(md5.result().toHex()).toLower();
-    return true;
 }
 
 bool parseEncoding(
@@ -1154,7 +1101,7 @@ bool FileReadAccess::read(
     }
 
     const QJsonObject paramsObject = params.toObject();
-    const QString path = extractString(paramsObject, QStringLiteral("path"));
+    const QString path = Common::extractStringTrimmed(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
         if ( invalidParams != nullptr )
@@ -1449,7 +1396,12 @@ bool FileReadAccess::read(
 
         QString md5Hex;
         QString md5Error;
-        if ( !calculateFileMd5Hex(fileInfo.absoluteFilePath(), &md5Hex, &md5Error) )
+        if ( !Common::calculateFileMd5Hex(
+                fileInfo.absoluteFilePath(),
+                &md5Hex,
+                &md5Error,
+                QStringLiteral("file.read")
+            ) )
         {
             if ( error != nullptr )
             {
@@ -1671,7 +1623,7 @@ bool FileReadAccess::read(
 
     if ( operation == FileReadOperation::Rg )
     {
-        const QString pattern = extractString(paramsObject, QStringLiteral("pattern"));
+        const QString pattern = Common::extractStringTrimmed(paramsObject, QStringLiteral("pattern"));
         if ( pattern.isEmpty() )
         {
             if ( invalidParams != nullptr )
@@ -2321,3 +2273,4 @@ bool FileReadAccess::read(
     );
     return true;
 }
+

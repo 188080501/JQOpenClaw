@@ -21,12 +21,6 @@ const int processMinTimeoutMs = 100;
 const int processMaxTimeoutMs = 300000;
 const int processKillWaitTimeoutMs = 3000;
 
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString().trimmed() : QString();
-}
-
 bool parseArguments(
     const QJsonObject &paramsObject,
     QStringList *arguments,
@@ -275,8 +269,8 @@ bool parseExecuteRequest(
     }
 
     const QJsonObject paramsObject = params.toObject();
-    const QString command = extractString(paramsObject, QStringLiteral("command"));
-    const QString programValue = extractString(paramsObject, QStringLiteral("program"));
+    const QString command = Common::extractStringTrimmed(paramsObject, QStringLiteral("command"));
+    const QString programValue = Common::extractStringTrimmed(paramsObject, QStringLiteral("program"));
     if ( !command.isEmpty() )
     {
         if ( error != nullptr )
@@ -304,7 +298,7 @@ bool parseExecuteRequest(
         return false;
     }
 
-    *workingDirectory = extractString(paramsObject, QStringLiteral("workingDirectory"));
+    *workingDirectory = Common::extractStringTrimmed(paramsObject, QStringLiteral("workingDirectory"));
 
     const QJsonValue stdinValue = paramsObject.value(QStringLiteral("stdin"));
     if ( stdinValue.isUndefined() || stdinValue.isNull() )
@@ -626,3 +620,4 @@ bool ProcessExec::execute(
     );
     return true;
 }
+

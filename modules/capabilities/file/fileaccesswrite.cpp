@@ -36,12 +36,6 @@ enum class FileWriteOperation
     MakeDir,
     RemoveDir,
 };
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString().trimmed() : QString();
-}
-
 QString normalizeToken(const QString &value)
 {
     return Common::normalizeToken(value);
@@ -478,7 +472,7 @@ bool FileWriteAccess::write(
     }
 
     const QJsonObject paramsObject = params.toObject();
-    const QString path = extractString(paramsObject, QStringLiteral("path"));
+    const QString path = Common::extractStringTrimmed(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
         if ( invalidParams != nullptr )
@@ -542,12 +536,12 @@ bool FileWriteAccess::write(
     if ( operation == FileWriteOperation::Move )
     {
         const QString destinationPath = [ &paramsObject ]() {
-            const QString byDestinationPath = extractString(paramsObject, QStringLiteral("destinationPath"));
+            const QString byDestinationPath = Common::extractStringTrimmed(paramsObject, QStringLiteral("destinationPath"));
             if ( !byDestinationPath.isEmpty() )
             {
                 return byDestinationPath;
             }
-            return extractString(paramsObject, QStringLiteral("toPath"));
+            return Common::extractStringTrimmed(paramsObject, QStringLiteral("toPath"));
         }();
         if ( destinationPath.isEmpty() )
         {
@@ -1160,4 +1154,5 @@ bool FileWriteAccess::write(
     );
     return true;
 }
+
 

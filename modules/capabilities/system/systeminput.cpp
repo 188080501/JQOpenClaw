@@ -17,6 +17,9 @@
 #include <QThreadPool>
 #include <QtGlobal>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -268,12 +271,6 @@ private:
     QList<InputActionRequest> actions_;
     quint64 dispatchId_ = 0;
 };
-
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString().trimmed() : QString();
-}
 
 bool parseIntValue(
     const QJsonValue &value,
@@ -548,7 +545,7 @@ bool parseInputAction(
     }
 
     *actionRequest = InputActionRequest();
-    const QString actionType = extractString(actionObject, QStringLiteral("type")).toLower();
+    const QString actionType = Common::extractStringTrimmed(actionObject, QStringLiteral("type")).toLower();
     if ( actionType.isEmpty() )
     {
         if ( error != nullptr )
@@ -598,7 +595,7 @@ bool parseInputAction(
             return false;
         }
 
-        const QString mode = extractString(actionObject, QStringLiteral("mode")).toLower();
+        const QString mode = Common::extractStringTrimmed(actionObject, QStringLiteral("mode")).toLower();
         actionRequest->moveMode = mode.isEmpty()
             ? QStringLiteral("absolute")
             : mode;
@@ -620,7 +617,7 @@ bool parseInputAction(
     if ( actionType == QStringLiteral("mouse.click") )
     {
         actionRequest->type = InputActionType::MouseClick;
-        const QString button = extractString(actionObject, QStringLiteral("button")).toLower();
+        const QString button = Common::extractStringTrimmed(actionObject, QStringLiteral("button")).toLower();
         actionRequest->mouseButton = button.isEmpty()
             ? QStringLiteral("left")
             : button;
@@ -765,7 +762,7 @@ bool parseInputAction(
             return false;
         }
 
-        const QString mode = extractString(actionObject, QStringLiteral("mode")).toLower();
+        const QString mode = Common::extractStringTrimmed(actionObject, QStringLiteral("mode")).toLower();
         actionRequest->moveMode = mode.isEmpty()
             ? QStringLiteral("absolute")
             : mode;
@@ -781,7 +778,7 @@ bool parseInputAction(
             return false;
         }
 
-        const QString button = extractString(actionObject, QStringLiteral("button")).toLower();
+        const QString button = Common::extractStringTrimmed(actionObject, QStringLiteral("button")).toLower();
         actionRequest->mouseButton = button.isEmpty()
             ? QStringLiteral("left")
             : button;
@@ -817,7 +814,7 @@ bool parseInputAction(
             actionRequest->type = InputActionType::KeyboardTap;
         }
 
-        actionRequest->keyName = extractString(actionObject, QStringLiteral("key"));
+        actionRequest->keyName = Common::extractStringTrimmed(actionObject, QStringLiteral("key"));
         if ( actionRequest->keyName.isEmpty() )
         {
             if ( error != nullptr )
@@ -1528,3 +1525,4 @@ bool SystemInput::execute(
     ).arg(dispatchId).arg(actions.size()).arg(pool->activeThreadCount()).arg(pool->maxThreadCount());
     return true;
 }
+

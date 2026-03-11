@@ -32,6 +32,17 @@ Qt::CaseSensitivity pathCaseSensitivity();
 
 QString normalizeToken(const QString &value);
 
+QString extractStringRaw(const QJsonObject &object, const QString &key);
+
+QString extractStringTrimmed(const QJsonObject &object, const QString &key);
+
+bool calculateFileMd5Hex(
+    const QString &path,
+    QString *md5Hex,
+    QString *error,
+    const QString &errorScope
+);
+
 bool parseEncoding(
     const QJsonObject &paramsObject,
     const QString &field,

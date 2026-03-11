@@ -10,14 +10,11 @@
 #include <QUuid>
 #include <QUrl>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 namespace
 {
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString() : QString();
-}
-
 bool shouldHandleNodeEvent(const QString &eventName)
 {
     return eventName == QStringLiteral("connect.challenge") ||
@@ -155,10 +152,10 @@ void GatewayClient::onTextMessageReceived(const QString &message)
     }
 
     const QJsonObject root = doc.object();
-    const QString frameType = extractString(root, "type");
+    const QString frameType = Common::extractStringRaw(root, "type");
     if ( frameType == "event" )
     {
-        const QString eventName = extractString(root, "event");
+        const QString eventName = Common::extractStringRaw(root, "event");
         if ( !shouldHandleNodeEvent(eventName) )
         {
             return;
@@ -168,7 +165,7 @@ void GatewayClient::onTextMessageReceived(const QString &message)
         if ( eventName == "connect.challenge" )
         {
             const QJsonObject payload = root.value("payload").toObject();
-            const QString nonce = extractString(payload, "nonce").trimmed();
+            const QString nonce = Common::extractStringRaw(payload, "nonce").trimmed();
             if ( nonce.isEmpty() )
             {
                 emit transportError(QStringLiteral("connect challenge nonce is missing"));
@@ -180,9 +177,9 @@ void GatewayClient::onTextMessageReceived(const QString &message)
         if ( eventName == "node.invoke.request" )
         {
             const QJsonObject payload = root.value("payload").toObject();
-            const QString invokeId = extractString(payload, "id").trimmed();
-            const QString nodeId = extractString(payload, "nodeId").trimmed();
-            const QString command = extractString(payload, "command").trimmed();
+            const QString invokeId = Common::extractStringRaw(payload, "id").trimmed();
+            const QString nodeId = Common::extractStringRaw(payload, "nodeId").trimmed();
+            const QString command = Common::extractStringRaw(payload, "command").trimmed();
             if ( invokeId.isEmpty() || nodeId.isEmpty() || command.isEmpty() )
             {
                 qWarning().noquote() << QStringLiteral(
@@ -200,7 +197,7 @@ void GatewayClient::onTextMessageReceived(const QString &message)
         return;
     }
 
-    const QString responseId = extractString(root, "id");
+    const QString responseId = Common::extractStringRaw(root, "id");
     if ( pendingConnectRequestId_.isEmpty() ||
          ( responseId != pendingConnectRequestId_ ) )
     {
@@ -235,3 +232,4 @@ QString GatewayClient::gatewayUrl() const
 {
     return options_.gatewayUrl.trimmed();
 }
+

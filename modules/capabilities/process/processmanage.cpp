@@ -7,6 +7,9 @@
 #include <QJsonArray>
 #include <QtGlobal>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 // C++ lib import
 #include <climits>
 
@@ -48,12 +51,6 @@ struct ProcessManageRequest
     int waitMs = processKillDefaultWaitMs;
     bool force = true;
 };
-
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString().trimmed() : QString();
-}
 
 bool parseOptionalBool(
     const QJsonObject &paramsObject,
@@ -318,10 +315,10 @@ bool parseManageRequest(
         );
     }
 
-    request->query = extractString(paramsObject, QStringLiteral("query"));
+    request->query = Common::extractStringTrimmed(paramsObject, QStringLiteral("query"));
     if ( request->query.isEmpty() )
     {
-        request->query = extractString(paramsObject, QStringLiteral("keyword"));
+        request->query = Common::extractStringTrimmed(paramsObject, QStringLiteral("keyword"));
     }
 
     if ( !parseOptionalBool(
@@ -1096,3 +1093,4 @@ bool ProcessManage::execute(
     return false;
 #endif
 }
+

@@ -16,67 +16,18 @@
 #include <QUuid>
 #include <QUrl>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 namespace
 {
 const int selfUpdateDownloadTimeoutMs = 5 * 60 * 1000;
-
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString().trimmed() : QString();
-}
 
 QString calculateMd5Hex(const QByteArray &bytes)
 {
     return QString::fromLatin1(
         QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex()
     ).toLower();
-}
-
-bool calculateFileMd5Hex(
-    const QString &path,
-    QString *md5Hex,
-    QString *error
-)
-{
-    if ( md5Hex == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("node.selfUpdate internal error: md5 output pointer is null");
-        }
-        return false;
-    }
-
-    QFile file(path);
-    if ( !file.open(QIODevice::ReadOnly) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("node.selfUpdate failed to open file for md5: %1")
-                .arg(file.errorString());
-        }
-        return false;
-    }
-
-    QCryptographicHash md5(QCryptographicHash::Md5);
-    while ( !file.atEnd() )
-    {
-        const QByteArray block = file.read(64 * 1024);
-        if ( block.isEmpty() && ( file.error() != QFile::NoError ) )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("node.selfUpdate failed to read file for md5: %1")
-                    .arg(file.errorString());
-            }
-            return false;
-        }
-        md5.addData(block);
-    }
-
-    *md5Hex = QString::fromLatin1(md5.result().toHex()).toLower();
-    return true;
 }
 
 bool isValidMd5Hex(const QString &value)
@@ -330,10 +281,10 @@ bool NodeSelfUpdate::execute(
     }
 
     const QJsonObject paramsObject = params.toObject();
-    QString downloadUrlText = extractString(paramsObject, QStringLiteral("downloadUrl"));
+    QString downloadUrlText = Common::extractStringTrimmed(paramsObject, QStringLiteral("downloadUrl"));
     if ( downloadUrlText.isEmpty() )
     {
-        downloadUrlText = extractString(paramsObject, QStringLiteral("url"));
+        downloadUrlText = Common::extractStringTrimmed(paramsObject, QStringLiteral("url"));
     }
     if ( downloadUrlText.isEmpty() )
     {
@@ -366,7 +317,7 @@ bool NodeSelfUpdate::execute(
         return false;
     }
 
-    const QString expectedMd5 = extractString(paramsObject, QStringLiteral("md5")).toLower();
+    const QString expectedMd5 = Common::extractStringTrimmed(paramsObject, QStringLiteral("md5")).toLower();
     if ( expectedMd5.isEmpty() )
     {
         if ( invalidParams != nullptr )
@@ -404,7 +355,12 @@ bool NodeSelfUpdate::execute(
 
     QString currentMd5;
     QString currentMd5Error;
-    if ( !calculateFileMd5Hex(appPath, &currentMd5, &currentMd5Error) )
+    if ( !Common::calculateFileMd5Hex(
+            appPath,
+            &currentMd5,
+            &currentMd5Error,
+            QStringLiteral("node.selfUpdate")
+        ) )
     {
         if ( error != nullptr )
         {
@@ -527,3 +483,4 @@ bool NodeSelfUpdate::execute(
     *result = out;
     return true;
 }
+

@@ -2,6 +2,8 @@
 #include "common/common.h"
 
 // Qt lib import
+#include <QCryptographicHash>
+#include <QFile>
 #include <QJsonValue>
 
 QJsonArray Common::toJsonArray(const QStringList &items)
@@ -86,6 +88,79 @@ QString Common::normalizeToken(const QString &value)
     normalized.remove('_');
     normalized.remove(' ');
     return normalized;
+}
+
+QString Common::extractStringRaw(const QJsonObject &object, const QString &key)
+{
+    const QJsonValue value = object.value(key);
+    return value.isString() ? value.toString() : QString();
+}
+
+QString Common::extractStringTrimmed(const QJsonObject &object, const QString &key)
+{
+    return extractStringRaw(object, key).trimmed();
+}
+
+bool Common::calculateFileMd5Hex(
+    const QString &path,
+    QString *md5Hex,
+    QString *error,
+    const QString &errorScope
+)
+{
+    const QString normalizedErrorScope = errorScope.trimmed();
+    const auto scopedErrorText =
+        [ normalizedErrorScope ](const QString &message)
+        {
+            if ( normalizedErrorScope.isEmpty() )
+            {
+                return message;
+            }
+            return QStringLiteral("%1 %2").arg(normalizedErrorScope, message);
+        };
+
+    if ( md5Hex == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedErrorText(QStringLiteral("md5 output pointer is null"));
+        }
+        return false;
+    }
+
+    QFile file(path);
+    if ( !file.open(QIODevice::ReadOnly) )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedErrorText(
+                QStringLiteral("failed to open file for md5: %1")
+                    .arg(file.errorString().trimmed())
+            );
+        }
+        return false;
+    }
+
+    QCryptographicHash md5(QCryptographicHash::Md5);
+    while ( !file.atEnd() )
+    {
+        const QByteArray block = file.read(64 * 1024);
+        if ( block.isEmpty() && ( file.error() != QFile::NoError ) )
+        {
+            if ( error != nullptr )
+            {
+                *error = scopedErrorText(
+                    QStringLiteral("failed to read file for md5: %1")
+                        .arg(file.errorString().trimmed())
+                );
+            }
+            return false;
+        }
+        md5.addData(block);
+    }
+
+    *md5Hex = QString::fromLatin1(md5.result().toHex()).toLower();
+    return true;
 }
 
 bool Common::parseEncoding(

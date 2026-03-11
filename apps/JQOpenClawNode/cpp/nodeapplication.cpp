@@ -128,12 +128,6 @@ bool applyFollowSystemStartupConfig(
 #endif
 }
 
-QString extractString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString().trimmed() : QString();
-}
-
 bool isJsonSimpleEscapeCharacter(const QChar ch)
 {
     return ( ch == '"' ) ||
@@ -1586,13 +1580,13 @@ void NodeApplication::appendInvokeHistoryEntry(
 
 void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 {
-    const QString invokeId = extractString(payload, QStringLiteral("id"));
-    const QString nodeId = extractString(payload, QStringLiteral("nodeId"));
-    const QString command = extractString(payload, QStringLiteral("command"));
+    const QString invokeId = Common::extractStringTrimmed(payload, QStringLiteral("id"));
+    const QString nodeId = Common::extractStringTrimmed(payload, QStringLiteral("nodeId"));
+    const QString command = Common::extractStringTrimmed(payload, QStringLiteral("command"));
     const QString invokeTime = QDateTime::currentDateTime()
         .toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
     appendInvokeHistoryEntry(invokeTime, command);
-    const QString idempotencyKey = extractString(payload, QStringLiteral("idempotencyKey"));
+    const QString idempotencyKey = Common::extractStringTrimmed(payload, QStringLiteral("idempotencyKey"));
     const QJsonValue paramsJsonValue = payload.value(QStringLiteral("paramsJSON"));
     const QString paramsJson = paramsJsonValue.isString()
         ? paramsJsonValue.toString().trimmed()
@@ -2894,4 +2888,5 @@ bool NodeApplication::isPairingRequiredConnectError(const QJsonObject &errorObje
     return message.contains(QStringLiteral("pairing required")) ||
         message.contains(QStringLiteral("not paired"));
 }
+
 
