@@ -35,6 +35,7 @@
 #include <QWindow>
 
 // JQOpenClaw import
+#include "common/common.h"
 #include "capabilities/file/fileaccessread.h"
 #include "capabilities/file/fileaccesswrite.h"
 #include "capabilities/node/nodeselfupdate.h"

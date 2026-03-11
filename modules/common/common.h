@@ -1,0 +1,9 @@
+#ifndef JQOPENCLAW_COMMON_COMMON_H_
+#define JQOPENCLAW_COMMON_COMMON_H_
+
+namespace Common
+{
+}
+
+#endif // JQOPENCLAW_COMMON_COMMON_H_
+

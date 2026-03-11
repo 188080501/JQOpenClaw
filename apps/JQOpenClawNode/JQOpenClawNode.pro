@@ -17,6 +17,7 @@ QMAKE_TARGET_COPYRIGHT   = "Copyright (c) 2026 Jason and others"
 include( $$PWD/../../modules/capabilities.pri )
 include( $$PWD/../../modules/openclawprotocol.pri )
 include( $$PWD/../../modules/crypto.pri )
+include( $$PWD/../../modules/common.pri )
 include( $$PWD/../../modules/jqcontrols.pri )
 
 INCLUDEPATH *= \
