@@ -130,43 +130,31 @@ bool parsePrograms(
         programs->append(program);
     }
 
-    const QJsonValue programsValue = paramsObject.value(QStringLiteral("programs"));
-    if ( !programsValue.isUndefined() && !programsValue.isNull() )
+    QStringList parsedPrograms;
+    if ( !Common::parseOptionalStringArray(
+            paramsObject,
+            QStringLiteral("programs"),
+            &parsedPrograms,
+            error,
+            QStringLiteral("process.which")
+        ) )
     {
-        if ( !programsValue.isArray() )
+        return false;
+    }
+
+    for ( int i = 0; i < parsedPrograms.size(); ++i )
+    {
+        const QString program = parsedPrograms.at(i).trimmed();
+        if ( program.isEmpty() )
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("process.which programs must be string array");
+                *error = QStringLiteral("process.which programs[%1] is empty").arg(i);
             }
             return false;
         }
 
-        const QJsonArray programsArray = programsValue.toArray();
-        for ( int i = 0; i < programsArray.size(); ++i )
-        {
-            const QJsonValue item = programsArray.at(i);
-            if ( !item.isString() )
-            {
-                if ( error != nullptr )
-                {
-                    *error = QStringLiteral("process.which programs[%1] must be string").arg(i);
-                }
-                return false;
-            }
-
-            const QString program = item.toString().trimmed();
-            if ( program.isEmpty() )
-            {
-                if ( error != nullptr )
-                {
-                    *error = QStringLiteral("process.which programs[%1] is empty").arg(i);
-                }
-                return false;
-            }
-
-            programs->append(program);
-        }
+        programs->append(program);
     }
 
     if ( programs->isEmpty() )

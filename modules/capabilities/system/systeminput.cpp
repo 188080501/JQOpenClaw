@@ -272,130 +272,6 @@ private:
     quint64 dispatchId_ = 0;
 };
 
-bool parseIntValue(
-    const QJsonValue &value,
-    const QString &field,
-    int minValue,
-    int maxValue,
-    int *parsedValue,
-    QString *error
-)
-{
-    if ( parsedValue == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input internal error: integer output pointer is null");
-        }
-        return false;
-    }
-
-    if ( !value.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input %1 must be integer").arg(field);
-        }
-        return false;
-    }
-
-    const double rawValue = value.toDouble(std::numeric_limits<double>::quiet_NaN());
-    if ( !std::isfinite(rawValue) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input %1 must be integer").arg(field);
-        }
-        return false;
-    }
-
-    if ( ( rawValue < static_cast<double>((std::numeric_limits<int>::min)()) ) ||
-         ( rawValue > static_cast<double>((std::numeric_limits<int>::max)()) ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input %1 out of range").arg(field);
-        }
-        return false;
-    }
-
-    const int integerValue = static_cast<int>(rawValue);
-    if ( rawValue != static_cast<double>(integerValue) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input %1 must be integer").arg(field);
-        }
-        return false;
-    }
-
-    if ( ( integerValue < minValue ) ||
-         ( integerValue > maxValue ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input %1 out of range [%2, %3]")
-                .arg(field)
-                .arg(minValue)
-                .arg(maxValue);
-        }
-        return false;
-    }
-
-    *parsedValue = integerValue;
-    return true;
-}
-
-bool parseRequiredInt(
-    const QJsonObject &object,
-    const QString &field,
-    int minValue,
-    int maxValue,
-    int *parsedValue,
-    QString *error
-)
-{
-    const QJsonValue value = object.value(field);
-    if ( value.isUndefined() || value.isNull() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input requires %1").arg(field);
-        }
-        return false;
-    }
-    return parseIntValue(value, field, minValue, maxValue, parsedValue, error);
-}
-
-bool parseOptionalInt(
-    const QJsonObject &object,
-    const QString &field,
-    int minValue,
-    int maxValue,
-    int defaultValue,
-    int *parsedValue,
-    QString *error
-)
-{
-    if ( parsedValue == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input internal error: integer output pointer is null");
-        }
-        return false;
-    }
-
-    *parsedValue = defaultValue;
-    const QJsonValue value = object.value(field);
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-
-    return parseIntValue(value, field, minValue, maxValue, parsedValue, error);
-}
-
 bool parseVirtualKey(const QString &inputKey, quint16 *virtualKey)
 {
     if ( virtualKey == nullptr )
@@ -560,13 +436,15 @@ bool parseInputAction(
     if ( actionType == QStringLiteral("mouse.move") )
     {
         actionRequest->type = InputActionType::MouseMove;
-        if ( !parseRequiredInt(
+        if ( !Common::parseRequiredInt(
                 actionObject,
                 QStringLiteral("x"),
                 (std::numeric_limits<int>::min)(),
                 (std::numeric_limits<int>::max)(),
                 &actionRequest->x,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -577,13 +455,15 @@ bool parseInputAction(
             }
             return false;
         }
-        if ( !parseRequiredInt(
+        if ( !Common::parseRequiredInt(
                 actionObject,
                 QStringLiteral("y"),
                 (std::numeric_limits<int>::min)(),
                 (std::numeric_limits<int>::max)(),
                 &actionRequest->y,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -633,14 +513,16 @@ bool parseInputAction(
             return false;
         }
 
-        if ( !parseOptionalInt(
+        if ( !Common::parseOptionalInt(
                 actionObject,
                 QStringLiteral("count"),
                 inputClickMinCount,
                 inputClickMaxCount,
                 1,
                 &actionRequest->clickCount,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -684,13 +566,15 @@ bool parseInputAction(
         const QString verticalField = hasDelta
             ? QStringLiteral("delta")
             : QStringLiteral("deltaY");
-        if ( !parseRequiredInt(
+        if ( !Common::parseRequiredInt(
                 actionObject,
                 verticalField,
                 inputScrollMinDelta,
                 inputScrollMaxDelta,
                 &actionRequest->scrollDeltaY,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -702,14 +586,16 @@ bool parseInputAction(
             return false;
         }
 
-        if ( !parseOptionalInt(
+        if ( !Common::parseOptionalInt(
                 actionObject,
                 QStringLiteral("deltaX"),
                 inputScrollMinDelta,
                 inputScrollMaxDelta,
                 0,
                 &actionRequest->scrollDeltaX,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -727,13 +613,15 @@ bool parseInputAction(
     if ( actionType == QStringLiteral("mouse.drag") )
     {
         actionRequest->type = InputActionType::MouseDrag;
-        if ( !parseRequiredInt(
+        if ( !Common::parseRequiredInt(
                 actionObject,
                 QStringLiteral("x"),
                 (std::numeric_limits<int>::min)(),
                 (std::numeric_limits<int>::max)(),
                 &actionRequest->x,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -744,13 +632,15 @@ bool parseInputAction(
             }
             return false;
         }
-        if ( !parseRequiredInt(
+        if ( !Common::parseRequiredInt(
                 actionObject,
                 QStringLiteral("y"),
                 (std::numeric_limits<int>::min)(),
                 (std::numeric_limits<int>::max)(),
                 &actionRequest->y,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -861,14 +751,16 @@ bool parseInputAction(
             return false;
         }
 
-        if ( !parseOptionalInt(
+        if ( !Common::parseOptionalInt(
                 actionObject,
                 QStringLiteral("intervalMs"),
                 inputDelayMinMs,
                 inputTextIntervalMaxMs,
                 0,
                 &actionRequest->intervalMs,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -886,13 +778,15 @@ bool parseInputAction(
     if ( actionType == QStringLiteral("delay") )
     {
         actionRequest->type = InputActionType::Delay;
-        if ( !parseRequiredInt(
+        if ( !Common::parseRequiredInt(
                 actionObject,
                 QStringLiteral("ms"),
                 inputDelayMinMs,
                 inputDelayMaxMs,
                 &actionRequest->ms,
-                error
+                error,
+                Common::IntegerParseStyle::Integer,
+                QStringLiteral("system.input")
             ) )
         {
             if ( error != nullptr )
@@ -995,36 +889,6 @@ bool parseInputRequest(
 
 #ifdef Q_OS_WIN
 
-QString win32ErrorMessage(DWORD errorCode)
-{
-    LPWSTR buffer = nullptr;
-    const DWORD size = FormatMessageW(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr,
-        errorCode,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        reinterpret_cast<LPWSTR>(&buffer),
-        0,
-        nullptr
-    );
-    if ( ( size == 0 ) || ( buffer == nullptr ) )
-    {
-        return QStringLiteral("win32 error %1").arg(QString::number(errorCode));
-    }
-
-    QString message = QString::fromWCharArray(buffer, static_cast<int>(size)).trimmed();
-    LocalFree(buffer);
-    if ( message.isEmpty() )
-    {
-        return QStringLiteral("win32 error %1").arg(QString::number(errorCode));
-    }
-    return QStringLiteral("%1 (code=%2)")
-        .arg(message)
-        .arg(errorCode);
-}
-
 bool sendMouseMoveAbsolute(int x, int y, QString *error)
 {
     const int virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
@@ -1062,7 +926,7 @@ bool sendMouseMoveAbsolute(int x, int y, QString *error)
         if ( error != nullptr )
         {
             *error = QStringLiteral("failed to send absolute mouse move: %1")
-                .arg(win32ErrorMessage(GetLastError()));
+                .arg(Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -1078,7 +942,7 @@ bool sendMouseMoveRelative(int x, int y, QString *error)
         if ( error != nullptr )
         {
             *error = QStringLiteral("failed to read cursor position for relative move: %1")
-                .arg(win32ErrorMessage(GetLastError()));
+                .arg(Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -1115,7 +979,7 @@ bool sendMouseButtonEvent(const QString &button, bool down, QString *error)
         if ( error != nullptr )
         {
             *error = QStringLiteral("failed to send mouse button event: %1")
-                .arg(win32ErrorMessage(GetLastError()));
+                .arg(Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -1181,7 +1045,7 @@ bool sendMouseScroll(int deltaX, int deltaY, quint64 dispatchId, QString *error)
         if ( error != nullptr )
         {
             *error = QStringLiteral("failed to send mouse scroll: %1")
-                .arg(win32ErrorMessage(GetLastError()));
+                .arg(Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -1266,7 +1130,7 @@ bool sendKeyboardVirtualKey(quint16 virtualKey, bool keyUp, QString *error)
         if ( error != nullptr )
         {
             *error = QStringLiteral("failed to send keyboard event: %1")
-                .arg(win32ErrorMessage(GetLastError()));
+                .arg(Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -1346,7 +1210,7 @@ bool sendKeyboardText(
             if ( error != nullptr )
             {
                 *error = QStringLiteral("failed to send keyboard text: %1")
-                    .arg(win32ErrorMessage(GetLastError()));
+                    .arg(Common::win32ErrorMessage(GetLastError()));
             }
             return false;
         }

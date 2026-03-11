@@ -15,12 +15,6 @@
 
 namespace
 {
-enum class ContentEncoding
-{
-    Utf8,
-    Base64,
-};
-
 const qint64 maxWriteBytes = 64 * 1024 * 1024;
 
 enum class FileWriteOperation
@@ -31,41 +25,6 @@ enum class FileWriteOperation
     MakeDir,
     RemoveDir,
 };
-bool parseEncoding(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    ContentEncoding *encoding,
-    QString *error
-)
-{
-    if ( encoding == nullptr )
-    {
-        return Common::parseEncoding(
-            paramsObject,
-            field,
-            nullptr,
-            error
-        );
-    }
-
-    Common::ContentEncoding commonEncoding = Common::ContentEncoding::Utf8;
-    const bool ok = Common::parseEncoding(
-        paramsObject,
-        field,
-        &commonEncoding,
-        error
-    );
-    if ( !ok )
-    {
-        return false;
-    }
-
-    *encoding = ( commonEncoding == Common::ContentEncoding::Base64 )
-        ? ContentEncoding::Base64
-        : ContentEncoding::Utf8;
-    return true;
-}
-
 QString fileWriteOperationName(FileWriteOperation operation)
 {
     switch ( operation )
@@ -163,7 +122,7 @@ bool parseWriteOperation(
 }
 bool decodeContent(
     const QString &content,
-    ContentEncoding encoding,
+    Common::ContentEncoding encoding,
     QByteArray *bytes,
     QString *error
 )
@@ -177,7 +136,7 @@ bool decodeContent(
         return false;
     }
 
-    if ( encoding == ContentEncoding::Utf8 )
+    if ( encoding == Common::ContentEncoding::Utf8 )
     {
         *bytes = content.toUtf8();
         return true;
@@ -204,15 +163,6 @@ bool decodeContent(
     }
     *bytes = decodedResult.decoded;
     return true;
-}
-
-QString encodingName(ContentEncoding encoding)
-{
-    return Common::encodingName(
-        ( encoding == ContentEncoding::Base64 )
-            ? Common::ContentEncoding::Base64
-            : Common::ContentEncoding::Utf8
-    );
 }
 
 QString normalizeAbsolutePathForCompare(const QString &absolutePath)
@@ -976,8 +926,8 @@ bool FileWriteAccess::write(
         return false;
     }
 
-    ContentEncoding encoding = ContentEncoding::Utf8;
-    if ( !parseEncoding(
+    Common::ContentEncoding encoding = Common::ContentEncoding::Utf8;
+    if ( !Common::parseEncoding(
             paramsObject,
             QStringLiteral("encoding"),
             &encoding,
@@ -1083,7 +1033,7 @@ bool FileWriteAccess::write(
         fileInfo.absoluteFilePath(),
         QString::number(contentBytes.size()),
         append ? QStringLiteral("true") : QStringLiteral("false"),
-        encodingName(encoding)
+        Common::encodingName(encoding)
     );
 
     QFile file(fileInfo.absoluteFilePath());
@@ -1113,7 +1063,7 @@ bool FileWriteAccess::write(
     QJsonObject out;
     out.insert(QStringLiteral("operation"), fileWriteOperationName(operation));
     out.insert(QStringLiteral("path"), writtenInfo.absoluteFilePath());
-    out.insert(QStringLiteral("encoding"), encodingName(encoding));
+    out.insert(QStringLiteral("encoding"), Common::encodingName(encoding));
     out.insert(QStringLiteral("appended"), append);
     out.insert(QStringLiteral("bytesWritten"), written);
     out.insert(QStringLiteral("sizeBytes"), writtenInfo.exists() ? writtenInfo.size() : written);

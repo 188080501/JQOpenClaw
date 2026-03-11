@@ -4,7 +4,6 @@
 // Qt lib import
 #include <QDebug>
 #include <QElapsedTimer>
-#include <QJsonArray>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QStringList>
@@ -27,137 +26,13 @@ bool parseArguments(
     QString *error
 )
 {
-    if ( arguments == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec internal error: arguments output pointer is null");
-        }
-        return false;
-    }
-
-    arguments->clear();
-    const QJsonValue argumentsValue = paramsObject.value(QStringLiteral("arguments"));
-    if ( argumentsValue.isUndefined() || argumentsValue.isNull() )
-    {
-        return true;
-    }
-    if ( !argumentsValue.isArray() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec arguments must be string array");
-        }
-        return false;
-    }
-
-    const QJsonArray argumentsArray = argumentsValue.toArray();
-    for ( int i = 0; i < argumentsArray.size(); ++i )
-    {
-        const QJsonValue item = argumentsArray.at(i);
-        if ( !item.isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("process.exec arguments[%1] must be string").arg(i);
-            }
-            return false;
-        }
-        arguments->append(item.toString());
-    }
-    return true;
-}
-
-bool parseOptionalBool(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    bool defaultValue,
-    bool *value,
-    QString *error
-)
-{
-    if ( value == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec internal error: bool output pointer is null");
-        }
-        return false;
-    }
-
-    *value = defaultValue;
-    const QJsonValue rawValue = paramsObject.value(field);
-    if ( rawValue.isUndefined() || rawValue.isNull() )
-    {
-        return true;
-    }
-    if ( !rawValue.isBool() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec %1 must be boolean").arg(field);
-        }
-        return false;
-    }
-
-    *value = rawValue.toBool();
-    return true;
-}
-
-bool parseTimeoutMs(
-    const QJsonObject &paramsObject,
-    int *timeoutMs,
-    QString *error
-)
-{
-    if ( timeoutMs == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec internal error: timeout output pointer is null");
-        }
-        return false;
-    }
-
-    *timeoutMs = processDefaultTimeoutMs;
-    const QJsonValue timeoutValue = paramsObject.value(QStringLiteral("timeoutMs"));
-    if ( timeoutValue.isUndefined() || timeoutValue.isNull() )
-    {
-        return true;
-    }
-    if ( !timeoutValue.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec timeoutMs must be number");
-        }
-        return false;
-    }
-
-    bool ok = false;
-    const int parsedTimeoutMs = QString::number(timeoutValue.toDouble(), 'g', 16).toInt(&ok);
-    if ( !ok )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec timeoutMs is invalid");
-        }
-        return false;
-    }
-    if ( ( parsedTimeoutMs < processMinTimeoutMs ) ||
-         ( parsedTimeoutMs > processMaxTimeoutMs ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "process.exec timeoutMs out of range [%1, %2]"
-            ).arg(processMinTimeoutMs).arg(processMaxTimeoutMs);
-        }
-        return false;
-    }
-
-    *timeoutMs = parsedTimeoutMs;
-    return true;
+    return Common::parseOptionalStringArray(
+        paramsObject,
+        QStringLiteral("arguments"),
+        arguments,
+        error,
+        QStringLiteral("process.exec")
+    );
 }
 
 bool parseEnvironment(
@@ -166,68 +41,15 @@ bool parseEnvironment(
     QString *error
 )
 {
-    if ( environment == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec internal error: environment output pointer is null");
-        }
-        return false;
-    }
-
-    bool inheritEnvironment = true;
-    if ( !parseOptionalBool(
-            paramsObject,
-            QStringLiteral("inheritEnvironment"),
-            true,
-            &inheritEnvironment,
-            error
-        ) )
-    {
-        return false;
-    }
-
-    *environment = inheritEnvironment
-        ? QProcessEnvironment::systemEnvironment()
-        : QProcessEnvironment();
-
-    const QJsonValue environmentValue = paramsObject.value(QStringLiteral("environment"));
-    if ( environmentValue.isUndefined() || environmentValue.isNull() )
-    {
-        return true;
-    }
-    if ( !environmentValue.isObject() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec environment must be object");
-        }
-        return false;
-    }
-
-    const QJsonObject environmentObject = environmentValue.toObject();
-    for ( auto it = environmentObject.constBegin(); it != environmentObject.constEnd(); ++it )
-    {
-        const QString key = it.key().trimmed();
-        if ( key.isEmpty() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("process.exec environment contains empty key");
-            }
-            return false;
-        }
-        if ( !it.value().isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("process.exec environment key \"%1\" must be string value").arg(key);
-            }
-            return false;
-        }
-        environment->insert(key, it.value().toString());
-    }
-    return true;
+    return Common::parseProcessEnvironment(
+        paramsObject,
+        QStringLiteral("environment"),
+        QStringLiteral("inheritEnvironment"),
+        true,
+        environment,
+        error,
+        QStringLiteral("process.exec")
+    );
 }
 
 bool parseExecuteRequest(
@@ -318,7 +140,16 @@ bool parseExecuteRequest(
         return false;
     }
 
-    if ( !parseTimeoutMs(paramsObject, timeoutMs, error) )
+    if ( !Common::parseTimeoutMs(
+            paramsObject,
+            QStringLiteral("timeoutMs"),
+            processDefaultTimeoutMs,
+            processMinTimeoutMs,
+            processMaxTimeoutMs,
+            timeoutMs,
+            error,
+            QStringLiteral("process.exec")
+        ) )
     {
         return false;
     }
@@ -326,23 +157,25 @@ bool parseExecuteRequest(
     {
         return false;
     }
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("detached"),
             false,
             detached,
-            error
+            error,
+            QStringLiteral("process.exec")
         ) )
     {
         return false;
     }
 
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("mergeChannels"),
             false,
             mergeChannels,
-            error
+            error,
+            QStringLiteral("process.exec")
         ) )
     {
         return false;

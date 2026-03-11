@@ -220,12 +220,6 @@ foreach ($file in $files)
 } | ConvertTo-Json -Compress -Depth 8
 )PS";
 
-enum class ContentEncoding
-{
-    Utf8,
-    Base64,
-};
-
 enum class FileReadOperation
 {
     Read,
@@ -236,40 +230,6 @@ enum class FileReadOperation
     Md5,
 };
 
-bool parseEncoding(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    ContentEncoding *encoding,
-    QString *error
-)
-{
-    if ( encoding == nullptr )
-    {
-        return Common::parseEncoding(
-            paramsObject,
-            field,
-            nullptr,
-            error
-        );
-    }
-
-    Common::ContentEncoding commonEncoding = Common::ContentEncoding::Utf8;
-    const bool ok = Common::parseEncoding(
-        paramsObject,
-        field,
-        &commonEncoding,
-        error
-    );
-    if ( !ok )
-    {
-        return false;
-    }
-
-    *encoding = ( commonEncoding == Common::ContentEncoding::Base64 )
-        ? ContentEncoding::Base64
-        : ContentEncoding::Utf8;
-    return true;
-}
 QString fileReadOperationName(FileReadOperation operation)
 {
     switch ( operation )
@@ -1020,22 +980,13 @@ bool parseRgMaxMatches(
     *maxMatches = parsed;
     return true;
 }
-QString encodeContent(const QByteArray &bytes, ContentEncoding encoding)
+QString encodeContent(const QByteArray &bytes, Common::ContentEncoding encoding)
 {
-    if ( encoding == ContentEncoding::Base64 )
+    if ( encoding == Common::ContentEncoding::Base64 )
     {
         return QString::fromLatin1(bytes.toBase64());
     }
     return QString::fromUtf8(bytes);
-}
-
-QString encodingName(ContentEncoding encoding)
-{
-    return Common::encodingName(
-        ( encoding == ContentEncoding::Base64 )
-            ? Common::ContentEncoding::Base64
-            : Common::ContentEncoding::Utf8
-    );
 }
 }
 
@@ -1407,8 +1358,8 @@ bool FileReadAccess::read(
             return false;
         }
 
-        ContentEncoding encoding = ContentEncoding::Utf8;
-        if ( !parseEncoding(
+        Common::ContentEncoding encoding = Common::ContentEncoding::Utf8;
+        if ( !Common::parseEncoding(
                 paramsObject,
                 QStringLiteral("encoding"),
                 &encoding,
@@ -1425,7 +1376,7 @@ bool FileReadAccess::read(
             }
             return false;
         }
-        if ( encoding != ContentEncoding::Utf8 )
+        if ( encoding != Common::ContentEncoding::Utf8 )
         {
             if ( invalidParams != nullptr )
             {
@@ -2094,8 +2045,8 @@ bool FileReadAccess::read(
         return false;
     }
 
-    ContentEncoding encoding = ContentEncoding::Utf8;
-    if ( !parseEncoding(
+    Common::ContentEncoding encoding = Common::ContentEncoding::Utf8;
+    if ( !Common::parseEncoding(
             paramsObject,
             QStringLiteral("encoding"),
             &encoding,
@@ -2161,7 +2112,7 @@ bool FileReadAccess::read(
         fileInfo.absoluteFilePath(),
         QString::number(offsetBytes),
         QString::number(maxBytes),
-        encodingName(encoding)
+        Common::encodingName(encoding)
     );
 
     QFile file(fileInfo.absoluteFilePath());
@@ -2221,7 +2172,7 @@ bool FileReadAccess::read(
     out.insert(QStringLiteral("path"), fileInfo.absoluteFilePath());
     out.insert(QStringLiteral("operation"), fileReadOperationName(operation));
     out.insert(QStringLiteral("targetType"), QStringLiteral("file"));
-    out.insert(QStringLiteral("encoding"), encodingName(encoding));
+    out.insert(QStringLiteral("encoding"), Common::encodingName(encoding));
     out.insert(QStringLiteral("sizeBytes"), fileInfo.size());
     out.insert(QStringLiteral("offsetBytes"), offsetBytes);
     out.insert(QStringLiteral("nextOffsetBytes"), nextOffsetBytes);

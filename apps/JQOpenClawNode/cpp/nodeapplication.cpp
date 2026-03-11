@@ -520,25 +520,17 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
         return false;
     }
 
-    *timeoutMs = -1;
-    const QJsonValue timeoutValue = payload.value(QStringLiteral("timeoutMs"));
-    if ( timeoutValue.isUndefined() || timeoutValue.isNull() )
-    {
-        return true;
-    }
-
-    if ( !timeoutValue.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("timeoutMs must be non-negative integer");
-        }
-        return false;
-    }
-
-    const double rawTimeoutMs = timeoutValue.toDouble();
-    if ( ( rawTimeoutMs < 0.0 ) ||
-         ( rawTimeoutMs > static_cast<double>((std::numeric_limits<int>::max)()) ) )
+    if ( !Common::parseOptionalInt(
+            payload,
+            QStringLiteral("timeoutMs"),
+            0,
+            (std::numeric_limits<int>::max)(),
+            -1,
+            timeoutMs,
+            nullptr,
+            Common::IntegerParseStyle::Integer,
+            QStringLiteral("node.invoke")
+        ) )
     {
         if ( error != nullptr )
         {
@@ -546,18 +538,6 @@ bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *e
         }
         return false;
     }
-
-    const int parsedTimeoutMs = static_cast<int>(rawTimeoutMs);
-    if ( rawTimeoutMs != static_cast<double>(parsedTimeoutMs) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("timeoutMs must be non-negative integer");
-        }
-        return false;
-    }
-
-    *timeoutMs = parsedTimeoutMs;
     return true;
 }
 

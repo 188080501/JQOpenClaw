@@ -52,144 +52,6 @@ struct ProcessManageRequest
     bool force = true;
 };
 
-bool parseOptionalBool(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    bool defaultValue,
-    bool *value,
-    QString *error
-)
-{
-    if ( value == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage internal error: bool output pointer is null");
-        }
-        return false;
-    }
-
-    *value = defaultValue;
-    const QJsonValue rawValue = paramsObject.value(field);
-    if ( rawValue.isUndefined() || rawValue.isNull() )
-    {
-        return true;
-    }
-    if ( !rawValue.isBool() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage %1 must be boolean").arg(field);
-        }
-        return false;
-    }
-
-    *value = rawValue.toBool();
-    return true;
-}
-
-bool parseIntValue(
-    const QJsonValue &rawValue,
-    const QString &field,
-    int minValue,
-    int maxValue,
-    int *value,
-    QString *error
-)
-{
-    if ( value == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage internal error: integer output pointer is null");
-        }
-        return false;
-    }
-
-    if ( !rawValue.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage %1 must be number").arg(field);
-        }
-        return false;
-    }
-
-    bool ok = false;
-    const int parsedValue = QString::number(rawValue.toDouble(), 'g', 16).toInt(&ok);
-    if ( !ok )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage %1 is invalid").arg(field);
-        }
-        return false;
-    }
-    if ( ( parsedValue < minValue ) || ( parsedValue > maxValue ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage %1 out of range [%2, %3]")
-                .arg(field, QString::number(minValue), QString::number(maxValue));
-        }
-        return false;
-    }
-
-    *value = parsedValue;
-    return true;
-}
-
-bool parseOptionalInt(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    int minValue,
-    int maxValue,
-    int defaultValue,
-    int *value,
-    QString *error
-)
-{
-    if ( value == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage internal error: integer output pointer is null");
-        }
-        return false;
-    }
-
-    *value = defaultValue;
-    const QJsonValue rawValue = paramsObject.value(field);
-    if ( rawValue.isUndefined() || rawValue.isNull() )
-    {
-        return true;
-    }
-
-    return parseIntValue(rawValue, field, minValue, maxValue, value, error);
-}
-
-bool parseRequiredInt(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    int minValue,
-    int maxValue,
-    int *value,
-    QString *error
-)
-{
-    const QJsonValue rawValue = paramsObject.value(field);
-    if ( rawValue.isUndefined() || rawValue.isNull() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage requires %1").arg(field);
-        }
-        return false;
-    }
-
-    return parseIntValue(rawValue, field, minValue, maxValue, value, error);
-}
-
 bool containsText(
     const QString &source,
     const QString &pattern,
@@ -283,35 +145,40 @@ bool parseManageRequest(
 
     if ( request->operation == ProcessManageOperation::Kill )
     {
-        if ( !parseRequiredInt(
+        if ( !Common::parseRequiredInt(
                 paramsObject,
                 QStringLiteral("pid"),
                 1,
                 INT_MAX,
                 &request->pid,
-                error
+                error,
+                Common::IntegerParseStyle::Number,
+                QStringLiteral("process.manage")
             ) )
         {
             return false;
         }
-        if ( !parseOptionalInt(
+        if ( !Common::parseOptionalInt(
                 paramsObject,
                 QStringLiteral("waitMs"),
                 processKillMinWaitMs,
                 processKillMaxWaitMs,
                 processKillDefaultWaitMs,
                 &request->waitMs,
-                error
+                error,
+                Common::IntegerParseStyle::Number,
+                QStringLiteral("process.manage")
             ) )
         {
             return false;
         }
-        return parseOptionalBool(
+        return Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("force"),
             true,
             &request->force,
-            error
+            error,
+            QStringLiteral("process.manage")
         );
     }
 
@@ -321,44 +188,49 @@ bool parseManageRequest(
         request->query = Common::extractStringTrimmed(paramsObject, QStringLiteral("keyword"));
     }
 
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("caseSensitive"),
             false,
             &request->caseSensitive,
-            error
+            error,
+            QStringLiteral("process.manage")
         ) )
     {
         return false;
     }
-    if ( !parseOptionalInt(
+    if ( !Common::parseOptionalInt(
             paramsObject,
             QStringLiteral("limit"),
             processListMinLimit,
             processListMaxLimit,
             processListDefaultLimit,
             &request->limit,
-            error
+            error,
+            Common::IntegerParseStyle::Number,
+            QStringLiteral("process.manage")
         ) )
     {
         return false;
     }
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("includePath"),
             false,
             &request->includePath,
-            error
+            error,
+            QStringLiteral("process.manage")
         ) )
     {
         return false;
     }
-    if ( !parseOptionalBool(
+    if ( !Common::parseOptionalBool(
             paramsObject,
             QStringLiteral("includeArchitecture"),
             false,
             &request->includeArchitecture,
-            error
+            error,
+            QStringLiteral("process.manage")
         ) )
     {
         return false;
@@ -367,7 +239,16 @@ bool parseManageRequest(
     const QJsonValue pidValue = paramsObject.value(QStringLiteral("pid"));
     if ( !pidValue.isUndefined() && !pidValue.isNull() )
     {
-        if ( !parseIntValue(pidValue, QStringLiteral("pid"), 1, INT_MAX, &request->pidFilter, error) )
+        if ( !Common::parseIntValue(
+                pidValue,
+                QStringLiteral("pid"),
+                1,
+                INT_MAX,
+                &request->pidFilter,
+                error,
+                Common::IntegerParseStyle::Number,
+                QStringLiteral("process.manage")
+            ) )
         {
             return false;
         }
@@ -389,35 +270,6 @@ bool parseManageRequest(
 }
 
 #ifdef Q_OS_WIN
-
-QString win32ErrorMessage(DWORD errorCode)
-{
-    LPWSTR buffer = nullptr;
-    const DWORD size = FormatMessageW(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr,
-        errorCode,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        reinterpret_cast<LPWSTR>(&buffer),
-        0,
-        nullptr
-    );
-    if ( ( size == 0 ) || ( buffer == nullptr ) )
-    {
-        return QStringLiteral("win32 error %1").arg(QString::number(errorCode));
-    }
-
-    QString message = QString::fromWCharArray(buffer, static_cast<int>(size)).trimmed();
-    LocalFree(buffer);
-    if ( message.isEmpty() )
-    {
-        return QStringLiteral("win32 error %1").arg(QString::number(errorCode));
-    }
-    return QStringLiteral("%1 (code=%2)")
-        .arg(message, QString::number(errorCode));
-}
 
 DWORD WINAPI terminateSelfProcessThreadProc(LPVOID)
 {
@@ -443,7 +295,7 @@ bool scheduleSelfTermination(QString *error)
         {
             *error = QStringLiteral(
                 "process.manage failed to schedule self termination: %1"
-            ).arg(win32ErrorMessage(GetLastError()));
+            ).arg(Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -677,7 +529,7 @@ bool runListProcess(
         if ( error != nullptr )
         {
             *error = QStringLiteral("process.manage failed to enumerate process snapshot: %1")
-                .arg(win32ErrorMessage(GetLastError()));
+                .arg(Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -689,7 +541,7 @@ bool runListProcess(
         if ( error != nullptr )
         {
             *error = QStringLiteral("process.manage failed to read process snapshot: %1")
-                .arg(win32ErrorMessage(GetLastError()));
+                .arg(Common::win32ErrorMessage(GetLastError()));
         }
         CloseHandle(snapshot);
         return false;
@@ -858,7 +710,7 @@ bool runKillProcess(
         if ( error != nullptr )
         {
             *error = QStringLiteral("process.manage failed to open process pid=%1: %2")
-                .arg(QString::number(request.pid), win32ErrorMessage(GetLastError()));
+                .arg(QString::number(request.pid), Common::win32ErrorMessage(GetLastError()));
         }
         return false;
     }
@@ -953,7 +805,7 @@ bool runKillProcess(
             if ( error != nullptr )
             {
                 *error = QStringLiteral("process.manage failed to terminate process pid=%1: %2")
-                    .arg(QString::number(request.pid), win32ErrorMessage(GetLastError()));
+                    .arg(QString::number(request.pid), Common::win32ErrorMessage(GetLastError()));
             }
             CloseHandle(processHandle);
             return false;
@@ -980,7 +832,7 @@ bool runKillProcess(
         if ( error != nullptr )
         {
             *error = QStringLiteral("process.manage failed while waiting process pid=%1: %2")
-                .arg(QString::number(request.pid), win32ErrorMessage(GetLastError()));
+                .arg(QString::number(request.pid), Common::win32ErrorMessage(GetLastError()));
         }
         CloseHandle(processHandle);
         return false;

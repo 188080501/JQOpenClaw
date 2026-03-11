@@ -4,7 +4,6 @@
 // Qt lib import
 #include <QDebug>
 #include <QElapsedTimer>
-#include <QJsonArray>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSet>
@@ -78,8 +77,19 @@ bool parseCommand(
         return false;
     }
 
-    const QJsonArray commandArray = commandValue.toArray();
-    if ( commandArray.isEmpty() )
+    QStringList commandItems;
+    if ( !Common::parseOptionalStringArray(
+            paramsObject,
+            QStringLiteral("command"),
+            &commandItems,
+            error,
+            QStringLiteral("system.run")
+        ) )
+    {
+        return false;
+    }
+
+    if ( commandItems.isEmpty() )
     {
         if ( error != nullptr )
         {
@@ -88,19 +98,9 @@ bool parseCommand(
         return false;
     }
 
-    for ( int i = 0; i < commandArray.size(); ++i )
+    for ( int i = 0; i < commandItems.size(); ++i )
     {
-        const QJsonValue itemValue = commandArray.at(i);
-        if ( !itemValue.isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.run command[%1] must be string").arg(i);
-            }
-            return false;
-        }
-
-        const QString itemText = itemValue.toString();
+        const QString itemText = commandItems.at(i);
         if ( i == 0 )
         {
             const QString parsedProgram = itemText.trimmed();
@@ -189,134 +189,24 @@ bool parseNeedsScreenRecording(
     return true;
 }
 
-bool parseTimeoutMs(
-    const QJsonObject &paramsObject,
-    int *timeoutMs,
-    QString *error
-)
-{
-    if ( timeoutMs == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: timeout output pointer is null");
-        }
-        return false;
-    }
-
-    *timeoutMs = processDefaultTimeoutMs;
-    const QJsonValue timeoutValue = paramsObject.value(QStringLiteral("timeoutMs"));
-    if ( timeoutValue.isUndefined() || timeoutValue.isNull() )
-    {
-        return true;
-    }
-
-    if ( !timeoutValue.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run timeoutMs must be number");
-        }
-        return false;
-    }
-
-    bool ok = false;
-    const int parsedTimeoutMs = QString::number(timeoutValue.toDouble(), 'g', 16).toInt(&ok);
-    if ( !ok )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run timeoutMs is invalid");
-        }
-        return false;
-    }
-    if ( ( parsedTimeoutMs < processMinTimeoutMs ) ||
-         ( parsedTimeoutMs > processMaxTimeoutMs ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "system.run timeoutMs out of range [%1, %2]"
-            ).arg(processMinTimeoutMs).arg(processMaxTimeoutMs);
-        }
-        return false;
-    }
-
-    *timeoutMs = parsedTimeoutMs;
-    return true;
-}
-
 bool parseEnvironment(
     const QJsonObject &paramsObject,
     QProcessEnvironment *environment,
     QString *error
 )
 {
-    if ( environment == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: environment output pointer is null");
-        }
-        return false;
-    }
-
-    *environment = QProcessEnvironment::systemEnvironment();
-    const QJsonValue envValue = paramsObject.value(QStringLiteral("env"));
-    if ( envValue.isUndefined() || envValue.isNull() )
-    {
-        return true;
-    }
-
-    if ( !envValue.isObject() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run env must be object");
-        }
-        return false;
-    }
-
-    const QJsonObject envObject = envValue.toObject();
-    for ( auto it = envObject.constBegin(); it != envObject.constEnd(); ++it )
-    {
-        const QString key = it.key().trimmed();
-        if ( key.isEmpty() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.run env contains empty key");
-            }
-            return false;
-        }
-        if ( !it.value().isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.run env key \"%1\" must be string value").arg(key);
-            }
-            return false;
-        }
-
-        const QString normalizedKey = key.toUpper();
-        if ( normalizedKey == QStringLiteral("PATH") )
-        {
-            qWarning().noquote() << QStringLiteral(
-                "[capability.system.run] ignore environment override key=%1"
-            ).arg(key);
-            continue;
-        }
-        if ( unsafeEnvironmentKeys.contains(normalizedKey) )
-        {
-            qWarning().noquote() << QStringLiteral(
-                "[capability.system.run] ignore unsafe environment key=%1"
-            ).arg(key);
-            continue;
-        }
-        environment->insert(key, it.value().toString());
-    }
-
-    return true;
+    return Common::parseProcessEnvironment(
+        paramsObject,
+        QStringLiteral("env"),
+        QString(),
+        true,
+        environment,
+        error,
+        QStringLiteral("system.run"),
+        true,
+        &unsafeEnvironmentKeys,
+        QStringLiteral("[capability.system.run]")
+    );
 }
 
 bool parseExecuteRequest(
@@ -364,7 +254,16 @@ bool parseExecuteRequest(
     {
         return false;
     }
-    if ( !parseTimeoutMs(paramsObject, timeoutMs, error) )
+    if ( !Common::parseTimeoutMs(
+            paramsObject,
+            QStringLiteral("timeoutMs"),
+            processDefaultTimeoutMs,
+            processMinTimeoutMs,
+            processMaxTimeoutMs,
+            timeoutMs,
+            error,
+            QStringLiteral("system.run")
+        ) )
     {
         return false;
     }
