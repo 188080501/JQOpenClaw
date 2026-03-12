@@ -267,7 +267,14 @@ bool NodeSelfUpdate::execute(
     return false;
 #endif
 
-    if ( !params.isObject() )
+    QString parseError;
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            &parseError,
+            QStringLiteral("node.selfUpdate")
+        ) )
     {
         if ( invalidParams != nullptr )
         {
@@ -275,12 +282,10 @@ bool NodeSelfUpdate::execute(
         }
         if ( error != nullptr )
         {
-            *error = QStringLiteral("node.selfUpdate params must be object");
+            *error = parseError;
         }
         return false;
     }
-
-    const QJsonObject paramsObject = params.toObject();
     QString downloadUrlText = Common::extractStringTrimmed(paramsObject, QStringLiteral("downloadUrl"));
     if ( downloadUrlText.isEmpty() )
     {

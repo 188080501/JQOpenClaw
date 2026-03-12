@@ -10,6 +10,9 @@
 #include <QThread>
 #include <QDebug>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 namespace
 {
 enum class ClipboardOperation
@@ -37,16 +40,16 @@ bool parseClipboardRequest(
     *operation = ClipboardOperation::Read;
     writeText->clear();
 
-    if ( !params.isObject() )
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            error,
+            QStringLiteral("system.clipboard")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.clipboard params must be object");
-        }
         return false;
     }
-
-    const QJsonObject paramsObject = params.toObject();
     const QJsonValue operationValue = paramsObject.value(QStringLiteral("operation"));
     if ( operationValue.isUndefined() )
     {
@@ -81,7 +84,18 @@ bool parseClipboardRequest(
     {
         *operation = ClipboardOperation::Write;
         const QJsonValue textValue = paramsObject.value(QStringLiteral("text"));
-        if ( textValue.isUndefined() || textValue.isNull() )
+        const bool hasText = !textValue.isUndefined() && !textValue.isNull();
+        if ( !Common::parseOptionalString(
+                paramsObject,
+                QStringLiteral("text"),
+                writeText,
+                error,
+                QStringLiteral("system.clipboard")
+            ) )
+        {
+            return false;
+        }
+        if ( !hasText )
         {
             if ( error != nullptr )
             {
@@ -89,15 +103,6 @@ bool parseClipboardRequest(
             }
             return false;
         }
-        if ( !textValue.isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.clipboard text must be string");
-            }
-            return false;
-        }
-        *writeText = textValue.toString();
         return true;
     }
 

@@ -193,10 +193,9 @@ bool DeviceIdentityStore::loadFromDisk(DeviceIdentity *identity, QString *error)
         return false;
     }
 
-    QJsonParseError parseError;
-    const QJsonDocument json = QJsonDocument::fromJson(file.readAll(), &parseError);
-    if ( ( parseError.error != QJsonParseError::NoError ) ||
-         !json.isObject() )
+    QString parseErrorText;
+    QJsonObject root;
+    if ( !Common::parseJsonObject(file.readAll(), &root, &parseErrorText) )
     {
         if ( error != nullptr )
         {
@@ -204,8 +203,6 @@ bool DeviceIdentityStore::loadFromDisk(DeviceIdentity *identity, QString *error)
         }
         return false;
     }
-
-    const QJsonObject root = json.object();
     const int version = root.value("version").toInt(-1);
     const QString storedDeviceId = root.value("deviceId").toString();
     const QString publicKeyText = root.value("publicKey").toString();

@@ -1011,7 +1011,14 @@ bool FileReadAccess::read(
         }
         return false;
     }
-    if ( !params.isObject() )
+    QString parseError;
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            &parseError,
+            QStringLiteral("file.read")
+        ) )
     {
         if ( invalidParams != nullptr )
         {
@@ -1019,12 +1026,10 @@ bool FileReadAccess::read(
         }
         if ( error != nullptr )
         {
-            *error = QStringLiteral("file.read params must be object");
+            *error = parseError;
         }
         return false;
     }
-
-    const QJsonObject paramsObject = params.toObject();
     const QString path = Common::extractStringTrimmed(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
@@ -1039,7 +1044,6 @@ bool FileReadAccess::read(
         return false;
     }
 
-    QString parseError;
     FileReadOperation operation = FileReadOperation::Read;
     if ( !parseReadOperation(paramsObject, &operation, &parseError) )
     {

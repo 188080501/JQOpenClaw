@@ -826,16 +826,16 @@ bool parseInputRequest(
     }
 
     actions->clear();
-    if ( !params.isObject() )
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            error,
+            QStringLiteral("system.input")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input params must be object");
-        }
         return false;
     }
-
-    const QJsonObject paramsObject = params.toObject();
     const QJsonValue actionsValue = paramsObject.value(QStringLiteral("actions"));
     if ( !actionsValue.isArray() )
     {

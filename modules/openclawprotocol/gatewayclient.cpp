@@ -140,18 +140,15 @@ void GatewayClient::onErrorOccurred(QAbstractSocket::SocketError socketError)
 
 void GatewayClient::onTextMessageReceived(const QString &message)
 {
-    QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &parseError);
-    if ( ( parseError.error != QJsonParseError::NoError ) ||
-         !doc.isObject() )
+    QString parseErrorText;
+    QJsonObject root;
+    if ( !Common::parseJsonObject(message.toUtf8(), &root, &parseErrorText) )
     {
         emit transportError(
-            QStringLiteral("invalid gateway message: %1").arg(parseError.errorString())
+            QStringLiteral("invalid gateway message: %1").arg(parseErrorText)
         );
         return;
     }
-
-    const QJsonObject root = doc.object();
     const QString frameType = Common::extractStringRaw(root, "type");
     if ( frameType == "event" )
     {

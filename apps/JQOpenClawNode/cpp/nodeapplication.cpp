@@ -1004,13 +1004,13 @@ bool NodeApplication::loadConfigFromDisk(QString *error)
         return false;
     }
 
-    QJsonParseError parseError;
-    const QJsonDocument configJson = QJsonDocument::fromJson(
-        configFile.readAll(),
-        &parseError
-    );
-    if ( ( parseError.error != QJsonParseError::NoError ) ||
-         !configJson.isObject() )
+    QString parseErrorText;
+    QJsonObject configObject;
+    if ( !Common::parseJsonObject(
+            configFile.readAll(),
+            &configObject,
+            &parseErrorText
+        ) )
     {
         if ( error != nullptr )
         {
@@ -1019,7 +1019,7 @@ bool NodeApplication::loadConfigFromDisk(QString *error)
         return false;
     }
 
-    QJsonObject normalizedConfig = normalizeConfig(configJson.object());
+    QJsonObject normalizedConfig = normalizeConfig(configObject);
     bool configChanged = false;
     if ( normalizedConfig.value(QStringLiteral("displayName")).toString().trimmed().isEmpty() )
     {

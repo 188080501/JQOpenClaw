@@ -9,6 +9,9 @@
 #include <QThread>
 #include <QWidget>
 
+// JQOpenClaw import
+#include "common/common.h"
+
 namespace
 {
 const int systemNotifyMessageMaxLength = 4000;
@@ -55,28 +58,32 @@ bool parseNotifyParams(
         return false;
     }
 
-    if ( !params.isObject() )
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            error,
+            QStringLiteral("system.notify")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.notify params must be object");
-        }
         return false;
     }
 
-    const QJsonObject paramsObject = params.toObject();
-
-    const QJsonValue messageValue = paramsObject.value(QStringLiteral("message"));
-    if ( !messageValue.isString() )
+    QString parsedMessage;
+    if ( !Common::parseRequiredString(
+            paramsObject,
+            QStringLiteral("message"),
+            &parsedMessage,
+            error,
+            QStringLiteral("system.notify"),
+            false,
+            true,
+            true
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.notify message must be string");
-        }
         return false;
     }
 
-    const QString parsedMessage = messageValue.toString();
     if ( parsedMessage.trimmed().isEmpty() )
     {
         if ( error != nullptr )
@@ -96,23 +103,21 @@ bool parseNotifyParams(
     }
 
     QString parsedTitle = defaultNotifyTitle();
-    const QJsonValue titleValue = paramsObject.value(QStringLiteral("title"));
-    if ( !titleValue.isUndefined() && !titleValue.isNull() )
+    QString candidateTitle;
+    if ( !Common::parseOptionalString(
+            paramsObject,
+            QStringLiteral("title"),
+            &candidateTitle,
+            error,
+            QStringLiteral("system.notify"),
+            true
+        ) )
     {
-        if ( !titleValue.isString() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.notify title must be string");
-            }
-            return false;
-        }
-
-        const QString candidateTitle = titleValue.toString().trimmed();
-        if ( !candidateTitle.isEmpty() )
-        {
-            parsedTitle = candidateTitle;
-        }
+        return false;
+    }
+    if ( !candidateTitle.isEmpty() )
+    {
+        parsedTitle = candidateTitle;
     }
 
     if ( parsedTitle.size() > systemNotifyTitleMaxLength )
@@ -240,4 +245,3 @@ bool SystemNotify::execute(
     );
     return true;
 }
-

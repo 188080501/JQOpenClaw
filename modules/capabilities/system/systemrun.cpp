@@ -127,32 +127,14 @@ bool parseRawCommand(
     QString *error
 )
 {
-    if ( rawCommand == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: rawCommand output pointer is null");
-        }
-        return false;
-    }
-
-    rawCommand->clear();
-    const QJsonValue rawCommandValue = paramsObject.value(QStringLiteral("rawCommand"));
-    if ( rawCommandValue.isUndefined() || rawCommandValue.isNull() )
-    {
-        return true;
-    }
-    if ( !rawCommandValue.isString() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run rawCommand must be string");
-        }
-        return false;
-    }
-
-    *rawCommand = rawCommandValue.toString().trimmed();
-    return true;
+    return Common::parseOptionalString(
+        paramsObject,
+        QStringLiteral("rawCommand"),
+        rawCommand,
+        error,
+        QStringLiteral("system.run"),
+        true
+    );
 }
 
 bool parseNeedsScreenRecording(
@@ -236,16 +218,16 @@ bool parseExecuteRequest(
         return false;
     }
 
-    if ( !params.isObject() )
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            error,
+            QStringLiteral("system.run")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run params must be object");
-        }
         return false;
     }
-
-    const QJsonObject paramsObject = params.toObject();
     if ( !parseCommand(paramsObject, program, arguments, error) )
     {
         return false;

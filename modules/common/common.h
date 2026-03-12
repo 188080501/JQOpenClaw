@@ -2,6 +2,7 @@
 #define JQOPENCLAW_COMMON_COMMON_H_
 
 // Qt lib import
+#include <QByteArray>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -44,6 +45,33 @@ QString extractStringRaw(const QJsonObject &object, const QString &key);
 
 QString extractStringTrimmed(const QJsonObject &object, const QString &key);
 
+bool parseParamsObject(
+    const QJsonValue &params,
+    QJsonObject *paramsObject,
+    QString *error,
+    const QString &scope = QString()
+);
+
+bool parseOptionalString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope = QString(),
+    bool trim = false
+);
+
+bool parseRequiredString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope = QString(),
+    bool trim = false,
+    bool allowEmpty = true,
+    bool missingAsTypeError = false
+);
+
 bool parseOptionalStringArray(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -65,6 +93,12 @@ bool calculateFileMd5Hex(
     QString *md5Hex,
     QString *error,
     const QString &errorScope
+);
+
+bool parseJsonObject(
+    const QByteArray &jsonBytes,
+    QJsonObject *object,
+    QString *error
 );
 
 QString lastOpenSslError();

@@ -82,17 +82,17 @@ bool parseManageRequest(
         }
         return false;
     }
-    if ( !params.isObject() )
+    *request = ProcessManageRequest();
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            error,
+            QStringLiteral("process.manage")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage params must be object");
-        }
         return false;
     }
-
-    *request = ProcessManageRequest();
-    const QJsonObject paramsObject = params.toObject();
     const QJsonValue operationValue = paramsObject.value(QStringLiteral("operation"));
     if ( operationValue.isUndefined() )
     {

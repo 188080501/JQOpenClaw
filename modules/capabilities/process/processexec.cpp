@@ -81,16 +81,16 @@ bool parseExecuteRequest(
         return false;
     }
 
-    if ( !params.isObject() )
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            error,
+            QStringLiteral("process.exec")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec params must be object");
-        }
         return false;
     }
-
-    const QJsonObject paramsObject = params.toObject();
     const QString command = Common::extractStringTrimmed(paramsObject, QStringLiteral("command"));
     const QString programValue = Common::extractStringTrimmed(paramsObject, QStringLiteral("program"));
     if ( !command.isEmpty() )
@@ -122,23 +122,18 @@ bool parseExecuteRequest(
 
     *workingDirectory = Common::extractStringTrimmed(paramsObject, QStringLiteral("workingDirectory"));
 
-    const QJsonValue stdinValue = paramsObject.value(QStringLiteral("stdin"));
-    if ( stdinValue.isUndefined() || stdinValue.isNull() )
+    QString stdinText;
+    if ( !Common::parseOptionalString(
+            paramsObject,
+            QStringLiteral("stdin"),
+            &stdinText,
+            error,
+            QStringLiteral("process.exec")
+        ) )
     {
-        stdinBytes->clear();
-    }
-    else if ( stdinValue.isString() )
-    {
-        *stdinBytes = stdinValue.toString().toUtf8();
-    }
-    else
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec stdin must be string");
-        }
         return false;
     }
+    *stdinBytes = stdinText.toUtf8();
 
     if ( !Common::parseTimeoutMs(
             paramsObject,

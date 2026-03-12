@@ -5,6 +5,7 @@
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QFile>
+#include <QJsonDocument>
 #include <QJsonValue>
 #include <cmath>
 #include <limits>
@@ -95,6 +96,82 @@ bool parseStringArrayField(
         }
         out->append(item.toString());
     }
+    return true;
+}
+
+bool parseStringField(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    bool required,
+    bool trim,
+    bool allowEmpty,
+    bool missingAsTypeError,
+    QString *value,
+    QString *error,
+    const QString &scope
+)
+{
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 output pointer is null").arg(field)
+            );
+        }
+        return false;
+    }
+
+    value->clear();
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() || rawValue.isNull() )
+    {
+        if ( !required )
+        {
+            return true;
+        }
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                missingAsTypeError
+                    ? QStringLiteral("%1 must be string").arg(field)
+                    : QStringLiteral("requires %1").arg(field)
+            );
+        }
+        return false;
+    }
+    if ( !rawValue.isString() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be string").arg(field)
+            );
+        }
+        return false;
+    }
+
+    QString parsedValue = rawValue.toString();
+    if ( trim )
+    {
+        parsedValue = parsedValue.trimmed();
+    }
+    if ( !allowEmpty && parsedValue.isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must not be empty").arg(field)
+            );
+        }
+        return false;
+    }
+
+    *value = parsedValue;
     return true;
 }
 }
@@ -194,6 +271,86 @@ QString Common::extractStringTrimmed(const QJsonObject &object, const QString &k
     return extractStringRaw(object, key).trimmed();
 }
 
+bool Common::parseParamsObject(
+    const QJsonValue &params,
+    QJsonObject *paramsObject,
+    QString *error,
+    const QString &scope
+)
+{
+    if ( paramsObject == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: params object output pointer is null")
+            );
+        }
+        return false;
+    }
+    if ( !params.isObject() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("params must be object")
+            );
+        }
+        return false;
+    }
+
+    *paramsObject = params.toObject();
+    return true;
+}
+
+bool Common::parseOptionalString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope,
+    bool trim
+)
+{
+    return parseStringField(
+        paramsObject,
+        field,
+        false,
+        trim,
+        true,
+        false,
+        value,
+        error,
+        scope
+    );
+}
+
+bool Common::parseRequiredString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope,
+    bool trim,
+    bool allowEmpty,
+    bool missingAsTypeError
+)
+{
+    return parseStringField(
+        paramsObject,
+        field,
+        true,
+        trim,
+        allowEmpty,
+        missingAsTypeError,
+        value,
+        error,
+        scope
+    );
+}
+
 bool Common::parseOptionalStringArray(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -228,6 +385,44 @@ bool Common::parseRequiredStringArray(
         error,
         scope
     );
+}
+
+bool Common::parseJsonObject(
+    const QByteArray &jsonBytes,
+    QJsonObject *object,
+    QString *error
+)
+{
+    if ( object == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("internal error: json object output pointer is null");
+        }
+        return false;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument json = QJsonDocument::fromJson(jsonBytes, &parseError);
+    if ( parseError.error != QJsonParseError::NoError )
+    {
+        if ( error != nullptr )
+        {
+            *error = parseError.errorString();
+        }
+        return false;
+    }
+    if ( !json.isObject() )
+    {
+        if ( error != nullptr )
+        {
+            *error = QStringLiteral("json root must be object");
+        }
+        return false;
+    }
+
+    *object = json.object();
+    return true;
 }
 
 bool Common::calculateFileMd5Hex(

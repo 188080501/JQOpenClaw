@@ -382,7 +382,14 @@ bool FileWriteAccess::write(
         }
         return false;
     }
-    if ( !params.isObject() )
+    QString parseError;
+    QJsonObject paramsObject;
+    if ( !Common::parseParamsObject(
+            params,
+            &paramsObject,
+            &parseError,
+            QStringLiteral("file.write")
+        ) )
     {
         if ( invalidParams != nullptr )
         {
@@ -390,12 +397,10 @@ bool FileWriteAccess::write(
         }
         if ( error != nullptr )
         {
-            *error = QStringLiteral("file.write params must be object");
+            *error = parseError;
         }
         return false;
     }
-
-    const QJsonObject paramsObject = params.toObject();
     const QString path = Common::extractStringTrimmed(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
@@ -410,7 +415,6 @@ bool FileWriteAccess::write(
         return false;
     }
 
-    QString parseError;
     bool allowWrite = false;
     if ( !Common::parseOptionalBool(
             paramsObject,
