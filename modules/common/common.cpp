@@ -1692,78 +1692,149 @@ bool Common::parseProcessEnvironment(
     {
         return true;
     }
-    if ( !environmentValue.isObject() )
+    const auto insertEnvironmentEntry =
+        [environment,
+         ignorePathOverride,
+         ignoredUpperKeys,
+         warningPrefix,
+         error,
+         scope](const QString &rawKey, const QString &rawValue, const QString &emptyKeyMessage) -> bool
+        {
+            const QString key = rawKey.trimmed();
+            if ( key.isEmpty() )
+            {
+                if ( error != nullptr )
+                {
+                    *error = scopedMessage(
+                        scope,
+                        emptyKeyMessage
+                    );
+                }
+                return false;
+            }
+
+            const QString normalizedKey = key.toUpper();
+            if ( ignorePathOverride &&
+                 ( normalizedKey == QStringLiteral("PATH") ) )
+            {
+                if ( !warningPrefix.isEmpty() )
+                {
+                    qWarning().noquote() << QStringLiteral(
+                        "%1 skip environment key=%2 reason=path_override"
+                    ).arg(
+                        warningPrefix,
+                        key
+                    );
+                }
+                return true;
+            }
+            if ( ( ignoredUpperKeys != nullptr ) &&
+                 ignoredUpperKeys->contains(normalizedKey) )
+            {
+                if ( !warningPrefix.isEmpty() )
+                {
+                    qWarning().noquote() << QStringLiteral(
+                        "%1 skip environment key=%2 reason=unsafe_key"
+                    ).arg(
+                        warningPrefix,
+                        key
+                    );
+                }
+                return true;
+            }
+
+            environment->insert(key, rawValue);
+            return true;
+        };
+
+    if ( environmentValue.isObject() )
+    {
+        const QJsonObject environmentObject = environmentValue.toObject();
+        for ( auto it = environmentObject.constBegin(); it != environmentObject.constEnd(); ++it )
+        {
+            if ( !it.value().isString() )
+            {
+                if ( error != nullptr )
+                {
+                    *error = scopedMessage(
+                        scope,
+                        QStringLiteral("%1 key \"%2\" must be string value")
+                            .arg(environmentField, it.key().trimmed())
+                    );
+                }
+                return false;
+            }
+
+            if ( !insertEnvironmentEntry(
+                    it.key(),
+                    it.value().toString(),
+                    QStringLiteral("%1 contains empty key").arg(environmentField)
+                ) )
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if ( !environmentValue.isArray() )
     {
         if ( error != nullptr )
         {
             *error = scopedMessage(
                 scope,
-                QStringLiteral("%1 must be object").arg(environmentField)
+                QStringLiteral("%1 must be object or string array").arg(environmentField)
             );
         }
         return false;
     }
 
-    const QJsonObject environmentObject = environmentValue.toObject();
-    for ( auto it = environmentObject.constBegin(); it != environmentObject.constEnd(); ++it )
+    const QJsonArray environmentArray = environmentValue.toArray();
+    for ( int index = 0; index < environmentArray.size(); ++index )
     {
-        const QString key = it.key().trimmed();
-        if ( key.isEmpty() )
+        const QJsonValue itemValue = environmentArray.at(index);
+        if ( !itemValue.isString() )
         {
             if ( error != nullptr )
             {
                 *error = scopedMessage(
                     scope,
-                    QStringLiteral("%1 contains empty key").arg(environmentField)
+                    QStringLiteral("%1[%2] must be KEY=VALUE string")
+                        .arg(environmentField)
+                        .arg(index)
                 );
             }
             return false;
         }
-        if ( !it.value().isString() )
+
+        const QString itemText = itemValue.toString();
+        const int equalIndex = itemText.indexOf('=');
+        if ( equalIndex <= 0 )
         {
             if ( error != nullptr )
             {
                 *error = scopedMessage(
                     scope,
-                    QStringLiteral("%1 key \"%2\" must be string value")
-                        .arg(environmentField, key)
+                    QStringLiteral("%1[%2] must be KEY=VALUE string")
+                        .arg(environmentField)
+                        .arg(index)
                 );
             }
             return false;
         }
 
-        const QString normalizedKey = key.toUpper();
-        if ( ignorePathOverride &&
-             ( normalizedKey == QStringLiteral("PATH") ) )
+        const QString key = itemText.left(equalIndex);
+        const QString value = itemText.mid(equalIndex + 1);
+        if ( !insertEnvironmentEntry(
+                key,
+                value,
+                QStringLiteral("%1[%2] has empty key").arg(environmentField).arg(index)
+            ) )
         {
-            if ( !warningPrefix.isEmpty() )
-            {
-                qWarning().noquote() << QStringLiteral(
-                    "%1 skip environment key=%2 reason=path_override"
-                ).arg(
-                    warningPrefix,
-                    key
-                );
-            }
-            continue;
+            return false;
         }
-        if ( ( ignoredUpperKeys != nullptr ) &&
-             ignoredUpperKeys->contains(normalizedKey) )
-        {
-            if ( !warningPrefix.isEmpty() )
-            {
-                qWarning().noquote() << QStringLiteral(
-                    "%1 skip environment key=%2 reason=unsafe_key"
-                ).arg(
-                    warningPrefix,
-                    key
-                );
-            }
-            continue;
-        }
-
-        environment->insert(key, it.value().toString());
     }
+
     return true;
 }
 

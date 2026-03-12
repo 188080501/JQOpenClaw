@@ -348,8 +348,15 @@ bool SystemRun::execute(
     const QProcess::ExitStatus exitStatus = process.exitStatus();
     const int exitCode = process.exitCode();
     const QProcess::ProcessError processError = process.error();
-    const bool processHasError = Common::hasProcessError(processError);
+    const QProcess::ProcessError reportedProcessError = timedOut
+        ? QProcess::Timedout
+        : processError;
+    const bool processHasError = timedOut || Common::hasProcessError(processError);
     const QString resultClass = Common::processResultClass(timedOut, exitStatus, exitCode);
+    const int reportedExitCode = timedOut ? -1 : exitCode;
+    const QString reportedExitStatus = timedOut
+        ? QStringLiteral("timeout")
+        : Common::processExitStatusName(exitStatus);
     const bool ok = ( resultClass == QStringLiteral("ok") );
 
     QJsonObject out;
@@ -361,17 +368,30 @@ bool SystemRun::execute(
     out.insert(QStringLiteral("elapsedMs"), static_cast<int>(timer.elapsed()));
     out.insert(QStringLiteral("detached"), false);
     out.insert(QStringLiteral("needsScreenRecording"), needsScreenRecording);
+    out.insert(
+        QStringLiteral("terminationReason"),
+        timedOut ? QStringLiteral("timeout_kill") : QStringLiteral("process_exit")
+    );
     out.insert(QStringLiteral("timedOut"), timedOut);
-    out.insert(QStringLiteral("exitCode"), exitCode);
+    out.insert(QStringLiteral("exitCode"), reportedExitCode);
     out.insert(
         QStringLiteral("exitStatus"),
-        Common::processExitStatusName(exitStatus)
+        reportedExitStatus
     );
     out.insert(QStringLiteral("stdout"), QString::fromLocal8Bit(stdoutBytes));
     out.insert(QStringLiteral("stderr"), QString::fromLocal8Bit(stderrBytes));
     out.insert(QStringLiteral("ok"), ok);
     out.insert(QStringLiteral("resultClass"), resultClass);
-    if ( processHasError )
+    if ( timedOut )
+    {
+        out.insert(QStringLiteral("processError"), static_cast<int>(reportedProcessError));
+        out.insert(QStringLiteral("processErrorName"), Common::processErrorName(reportedProcessError));
+        out.insert(
+            QStringLiteral("processErrorString"),
+            QStringLiteral("process terminated after timeout")
+        );
+    }
+    else if ( processHasError )
     {
         out.insert(QStringLiteral("processError"), static_cast<int>(processError));
         out.insert(QStringLiteral("processErrorName"), Common::processErrorName(processError));
@@ -383,7 +403,7 @@ bool SystemRun::execute(
         "[capability.system.run] done program=%1 exitCode=%2 timedOut=%3 elapsedMs=%4"
     ).arg(
         program,
-        QString::number(process.exitCode()),
+        QString::number(reportedExitCode),
         timedOut ? QStringLiteral("true") : QStringLiteral("false"),
         QString::number(timer.elapsed())
     );
