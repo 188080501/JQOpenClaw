@@ -66,6 +66,16 @@ bool parseRequiredTrimmedStringAlias(
     const QString &missingMessage = QString()
 );
 
+void resetInvalidParams(bool *invalidParams);
+
+void markInvalidParams(bool *invalidParams);
+
+bool failWithError(QString *error, const QString &message);
+
+bool failIfNull(const void *pointer, QString *error, const QString &message);
+
+bool failInvalidParams(bool *invalidParams, QString *error, const QString &message);
+
 bool parseParamsObject(
     const QJsonValue &params,
     QJsonObject *paramsObject,

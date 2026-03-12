@@ -65,19 +65,15 @@ bool parseExecuteRequest(
     QString *error
 )
 {
-    if ( ( program == nullptr ) ||
-         ( arguments == nullptr ) ||
-         ( workingDirectory == nullptr ) ||
-         ( stdinBytes == nullptr ) ||
-         ( timeoutMs == nullptr ) ||
-         ( detached == nullptr ) ||
-         ( mergeChannels == nullptr ) ||
-         ( environment == nullptr ) )
+    if ( !Common::failIfNull(program, error, QStringLiteral("process.exec internal error: output pointer is null")) ||
+         !Common::failIfNull(arguments, error, QStringLiteral("process.exec internal error: output pointer is null")) ||
+         !Common::failIfNull(workingDirectory, error, QStringLiteral("process.exec internal error: output pointer is null")) ||
+         !Common::failIfNull(stdinBytes, error, QStringLiteral("process.exec internal error: output pointer is null")) ||
+         !Common::failIfNull(timeoutMs, error, QStringLiteral("process.exec internal error: output pointer is null")) ||
+         !Common::failIfNull(detached, error, QStringLiteral("process.exec internal error: output pointer is null")) ||
+         !Common::failIfNull(mergeChannels, error, QStringLiteral("process.exec internal error: output pointer is null")) ||
+         !Common::failIfNull(environment, error, QStringLiteral("process.exec internal error: output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec internal error: output pointer is null");
-        }
         return false;
     }
 
@@ -219,17 +215,9 @@ bool ProcessExec::execute(
     bool *invalidParams
 )
 {
-    if ( invalidParams != nullptr )
+    Common::resetInvalidParams(invalidParams);
+    if ( !Common::failIfNull(result, error, QStringLiteral("process.exec output pointer is null")) )
     {
-        *invalidParams = false;
-    }
-
-    if ( result == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.exec output pointer is null");
-        }
         return false;
     }
 
@@ -255,15 +243,7 @@ bool ProcessExec::execute(
             &parseError
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     if ( ( !detached ) && ( invokeTimeoutMs >= 0 ) )

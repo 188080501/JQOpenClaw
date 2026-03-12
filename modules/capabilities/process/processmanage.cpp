@@ -74,12 +74,8 @@ bool parseManageRequest(
     QString *error
 )
 {
-    if ( request == nullptr )
+    if ( !Common::failIfNull(request, error, QStringLiteral("process.manage internal error: request output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage internal error: request output pointer is null");
-        }
         return false;
     }
     *request = ProcessManageRequest();
@@ -503,12 +499,8 @@ bool runListProcess(
     QString *error
 )
 {
-    if ( result == nullptr )
+    if ( !Common::failIfNull(result, error, QStringLiteral("process.manage internal error: output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage internal error: output pointer is null");
-        }
         return false;
     }
 
@@ -673,12 +665,8 @@ bool runKillProcess(
     QString *error
 )
 {
-    if ( result == nullptr )
+    if ( !Common::failIfNull(result, error, QStringLiteral("process.manage internal error: output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage internal error: output pointer is null");
-        }
         return false;
     }
 
@@ -876,16 +864,9 @@ bool ProcessManage::execute(
     bool *invalidParams
 )
 {
-    if ( invalidParams != nullptr )
+    Common::resetInvalidParams(invalidParams);
+    if ( !Common::failIfNull(result, error, QStringLiteral("process.manage output pointer is null")) )
     {
-        *invalidParams = false;
-    }
-    if ( result == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage output pointer is null");
-        }
         return false;
     }
 
@@ -893,15 +874,7 @@ bool ProcessManage::execute(
     QString parseError;
     if ( !parseManageRequest(params, &request, &parseError) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     qInfo().noquote() << QStringLiteral(

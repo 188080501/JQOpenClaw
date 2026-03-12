@@ -740,17 +740,9 @@ bool FileReadAccess::read(
     bool *invalidParams
 )
 {
-    if ( invalidParams != nullptr )
+    Common::resetInvalidParams(invalidParams);
+    if ( !Common::failIfNull(result, error, QStringLiteral("file.read output pointer is null")) )
     {
-        *invalidParams = false;
-    }
-
-    if ( result == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file.read output pointer is null");
-        }
         return false;
     }
     QString parseError;
@@ -762,42 +754,22 @@ bool FileReadAccess::read(
             QStringLiteral("file.read")
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
     const QString path = Common::extractStringTrimmed(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file.read path is required");
-        }
-        return false;
+        return Common::failInvalidParams(
+            invalidParams,
+            error,
+            QStringLiteral("file.read path is required")
+        );
     }
 
     FileReadOperation operation = FileReadOperation::Read;
     if ( !parseReadOperation(paramsObject, &operation, &parseError) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     const QFileInfo fileInfo(path);
@@ -830,15 +802,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         bool recursive = false;
@@ -850,15 +814,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         bool includeHidden = true;
@@ -870,15 +826,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         QStringList globPatterns;
@@ -888,15 +836,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         qint64 maxEntries = defaultReadMaxEntries;
@@ -904,15 +844,7 @@ bool FileReadAccess::read(
         {
             if ( !parseReadMaxEntries(paramsObject, &maxEntries, &parseError) )
             {
-                if ( invalidParams != nullptr )
-                {
-                    *invalidParams = true;
-                }
-                if ( error != nullptr )
-                {
-                    *error = parseError;
-                }
-                return false;
+                return Common::failInvalidParams(invalidParams, error, parseError);
             }
         }
 
@@ -1112,27 +1044,15 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
         if ( encoding != Common::ContentEncoding::Utf8 )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.read lines encoding must be utf8");
-            }
-            return false;
+            return Common::failInvalidParams(
+                invalidParams,
+                error,
+                QStringLiteral("file.read lines encoding must be utf8")
+            );
         }
 
         qint64 startLine = 0;
@@ -1144,15 +1064,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         qint64 endLine = 0;
@@ -1164,44 +1076,26 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         if ( endLine < startLine )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("endLine must be >= startLine");
-            }
-            return false;
+            return Common::failInvalidParams(
+                invalidParams,
+                error,
+                QStringLiteral("endLine must be >= startLine")
+            );
         }
 
         const qint64 lineSpan = ( endLine - startLine + 1 );
         if ( lineSpan > maxReadLineSpan )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral(
-                    "line span must be integer within [1, %1]"
-                ).arg(maxReadLineSpan);
-            }
-            return false;
+            return Common::failInvalidParams(
+                invalidParams,
+                error,
+                QStringLiteral("line span must be integer within [1, %1]").arg(maxReadLineSpan)
+            );
         }
 
         qInfo().noquote() << QStringLiteral(
@@ -1296,29 +1190,17 @@ bool FileReadAccess::read(
         const QString pattern = Common::extractStringTrimmed(paramsObject, QStringLiteral("pattern"));
         if ( pattern.isEmpty() )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.read rg pattern is required");
-            }
-            return false;
+            return Common::failInvalidParams(
+                invalidParams,
+                error,
+                QStringLiteral("file.read rg pattern is required")
+            );
         }
 
         qint64 maxMatches = defaultRgMaxMatches;
         if ( !parseRgMaxMatches(paramsObject, &maxMatches, &parseError) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         bool caseSensitive = false;
@@ -1330,15 +1212,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         bool includeHidden = false;
@@ -1350,15 +1224,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         bool literal = false;
@@ -1370,15 +1236,7 @@ bool FileReadAccess::read(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         QStringList rgArguments;
@@ -1799,57 +1657,27 @@ bool FileReadAccess::read(
             &parseError
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     qint64 maxBytes = defaultReadMaxBytes;
     if ( !parseReadMaxBytes(paramsObject, &maxBytes, &parseError) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     qint64 offsetBytes = 0;
     if ( !parseReadOffsetBytes(paramsObject, &offsetBytes, &parseError) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
     if ( offsetBytes > fileInfo.size() )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "offsetBytes must be integer within [0, %1]"
-            ).arg(fileInfo.size());
-        }
-        return false;
+        return Common::failInvalidParams(
+            invalidParams,
+            error,
+            QStringLiteral("offsetBytes must be integer within [0, %1]").arg(fileInfo.size())
+        );
     }
 
     qInfo().noquote() << QStringLiteral(

@@ -357,17 +357,9 @@ bool FileWriteAccess::write(
     bool *invalidParams
 )
 {
-    if ( invalidParams != nullptr )
+    Common::resetInvalidParams(invalidParams);
+    if ( !Common::failIfNull(result, error, QStringLiteral("file.write output pointer is null")) )
     {
-        *invalidParams = false;
-    }
-
-    if ( result == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file.write output pointer is null");
-        }
         return false;
     }
     QString parseError;
@@ -379,28 +371,16 @@ bool FileWriteAccess::write(
             QStringLiteral("file.write")
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
     const QString path = Common::extractStringTrimmed(paramsObject, QStringLiteral("path"));
     if ( path.isEmpty() )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file.write path is required");
-        }
-        return false;
+        return Common::failInvalidParams(
+            invalidParams,
+            error,
+            QStringLiteral("file.write path is required")
+        );
     }
 
     bool allowWrite = false;
@@ -412,41 +392,21 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
     if ( !allowWrite )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file.write is disabled by default; set allowWrite=true to proceed");
-        }
-        return false;
+        return Common::failInvalidParams(
+            invalidParams,
+            error,
+            QStringLiteral("file.write is disabled by default; set allowWrite=true to proceed")
+        );
     }
 
     FileWriteOperation operation = FileWriteOperation::Write;
     if ( !parseWriteOperation(paramsObject, &operation, &parseError) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     if ( operation == FileWriteOperation::Move )
@@ -462,15 +422,7 @@ bool FileWriteAccess::write(
                 QStringLiteral("file.write move requires destinationPath or toPath")
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         const QFileInfo sourceInfo(path);
@@ -488,30 +440,22 @@ bool FileWriteAccess::write(
         const QString destinationAbsolutePath = destinationInfo.absoluteFilePath();
         if ( sourceAbsolutePath.compare(destinationAbsolutePath, Common::pathCaseSensitivity()) == 0 )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.write move source and destination must be different");
-            }
-            return false;
+            return Common::failInvalidParams(
+                invalidParams,
+                error,
+                QStringLiteral("file.write move source and destination must be different")
+            );
         }
 
         const bool sourceIsDirectory = sourceInfo.isDir() && !sourceInfo.isSymLink();
         if ( sourceIsDirectory &&
              isSameOrChildPath(destinationAbsolutePath, sourceAbsolutePath) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.write move destination must not be inside source directory");
-            }
-            return false;
+            return Common::failInvalidParams(
+                invalidParams,
+                error,
+                QStringLiteral("file.write move destination must not be inside source directory")
+            );
         }
 
         bool createDirs = true;
@@ -523,15 +467,7 @@ bool FileWriteAccess::write(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         bool overwrite = false;
@@ -543,15 +479,7 @@ bool FileWriteAccess::write(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         if ( createDirs )
@@ -572,15 +500,11 @@ bool FileWriteAccess::write(
         {
             if ( isSameOrChildPath(sourceAbsolutePath, destinationAbsolutePath) )
             {
-                if ( invalidParams != nullptr )
-                {
-                    *invalidParams = true;
-                }
-                if ( error != nullptr )
-                {
-                    *error = QStringLiteral("file.write move destination must not contain source path");
-                }
-                return false;
+                return Common::failInvalidParams(
+                    invalidParams,
+                    error,
+                    QStringLiteral("file.write move destination must not contain source path")
+                );
             }
 
             if ( !overwrite )
@@ -759,15 +683,7 @@ bool FileWriteAccess::write(
                 &parseError
             ) )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = parseError;
-            }
-            return false;
+            return Common::failInvalidParams(invalidParams, error, parseError);
         }
 
         const QFileInfo targetInfo(path);
@@ -860,15 +776,11 @@ bool FileWriteAccess::write(
         }
         if ( !targetInfo.isDir() || targetInfo.isSymLink() )
         {
-            if ( invalidParams != nullptr )
-            {
-                *invalidParams = true;
-            }
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("file.write rmdir target must be directory");
-            }
-            return false;
+            return Common::failInvalidParams(
+                invalidParams,
+                error,
+                QStringLiteral("file.write rmdir target must be directory")
+            );
         }
 
         const QString targetAbsolutePath = targetInfo.absoluteFilePath();
@@ -917,15 +829,7 @@ bool FileWriteAccess::write(
             true
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     Common::ContentEncoding encoding = Common::ContentEncoding::Utf8;
@@ -936,15 +840,7 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     bool append = false;
@@ -956,15 +852,7 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     bool createDirs = true;
@@ -976,43 +864,21 @@ bool FileWriteAccess::write(
             &parseError
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     QByteArray contentBytes;
     if ( !decodeContent(content, encoding, &contentBytes, &parseError) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
     if ( contentBytes.size() > maxWriteBytes )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "file.write content bytes exceed limit %1"
-            ).arg(maxWriteBytes);
-        }
-        return false;
+        return Common::failInvalidParams(
+            invalidParams,
+            error,
+            QStringLiteral("file.write content bytes exceed limit %1").arg(maxWriteBytes)
+        );
     }
 
     const QFileInfo fileInfo(path);

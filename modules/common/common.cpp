@@ -354,6 +354,46 @@ bool Common::parseRequiredTrimmedStringAlias(
     return true;
 }
 
+void Common::resetInvalidParams(bool *invalidParams)
+{
+    if ( invalidParams != nullptr )
+    {
+        *invalidParams = false;
+    }
+}
+
+void Common::markInvalidParams(bool *invalidParams)
+{
+    if ( invalidParams != nullptr )
+    {
+        *invalidParams = true;
+    }
+}
+
+bool Common::failWithError(QString *error, const QString &message)
+{
+    if ( error != nullptr )
+    {
+        *error = message;
+    }
+    return false;
+}
+
+bool Common::failIfNull(const void *pointer, QString *error, const QString &message)
+{
+    if ( pointer != nullptr )
+    {
+        return true;
+    }
+    return failWithError(error, message);
+}
+
+bool Common::failInvalidParams(bool *invalidParams, QString *error, const QString &message)
+{
+    markInvalidParams(invalidParams);
+    return failWithError(error, message);
+}
+
 bool Common::parseParamsObject(
     const QJsonValue &params,
     QJsonObject *paramsObject,

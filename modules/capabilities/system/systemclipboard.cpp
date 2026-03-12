@@ -28,12 +28,9 @@ bool parseClipboardRequest(
     QString *error
 )
 {
-    if ( ( operation == nullptr ) || ( writeText == nullptr ) )
+    if ( !Common::failIfNull(operation, error, QStringLiteral("system.clipboard internal error: output pointer is null")) ||
+         !Common::failIfNull(writeText, error, QStringLiteral("system.clipboard internal error: output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.clipboard internal error: output pointer is null");
-        }
         return false;
     }
 
@@ -114,12 +111,8 @@ bool executeClipboardOperation(
     QString *error
 )
 {
-    if ( result == nullptr )
+    if ( !Common::failIfNull(result, error, QStringLiteral("system.clipboard result output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.clipboard result output pointer is null");
-        }
         return false;
     }
 
@@ -224,17 +217,9 @@ bool SystemClipboard::execute(
     bool *invalidParams
 )
 {
-    if ( invalidParams != nullptr )
+    Common::resetInvalidParams(invalidParams);
+    if ( !Common::failIfNull(result, error, QStringLiteral("system.clipboard output pointer is null")) )
     {
-        *invalidParams = false;
-    }
-
-    if ( result == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.clipboard output pointer is null");
-        }
         return false;
     }
 
@@ -243,15 +228,7 @@ bool SystemClipboard::execute(
     QString parseError;
     if ( !parseClipboardRequest(params, &operation, &writeText, &parseError) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     qInfo().noquote() << QStringLiteral(

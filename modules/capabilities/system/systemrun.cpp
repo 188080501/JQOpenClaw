@@ -46,12 +46,9 @@ bool parseCommand(
     QString *error
 )
 {
-    if ( ( program == nullptr ) || ( arguments == nullptr ) )
+    if ( !Common::failIfNull(program, error, QStringLiteral("system.run internal error: command output pointer is null")) ||
+         !Common::failIfNull(arguments, error, QStringLiteral("system.run internal error: command output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: command output pointer is null");
-        }
         return false;
     }
 
@@ -142,12 +139,12 @@ bool parseNeedsScreenRecording(
     QString *error
 )
 {
-    if ( needsScreenRecording == nullptr )
+    if ( !Common::failIfNull(
+            needsScreenRecording,
+            error,
+            QStringLiteral("system.run internal error: needsScreenRecording output pointer is null")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: needsScreenRecording output pointer is null");
-        }
         return false;
     }
 
@@ -193,18 +190,14 @@ bool parseExecuteRequest(
     QString *error
 )
 {
-    if ( ( program == nullptr ) ||
-         ( arguments == nullptr ) ||
-         ( rawCommand == nullptr ) ||
-         ( workingDirectory == nullptr ) ||
-         ( timeoutMs == nullptr ) ||
-         ( needsScreenRecording == nullptr ) ||
-         ( environment == nullptr ) )
+    if ( !Common::failIfNull(program, error, QStringLiteral("system.run internal error: output pointer is null")) ||
+         !Common::failIfNull(arguments, error, QStringLiteral("system.run internal error: output pointer is null")) ||
+         !Common::failIfNull(rawCommand, error, QStringLiteral("system.run internal error: output pointer is null")) ||
+         !Common::failIfNull(workingDirectory, error, QStringLiteral("system.run internal error: output pointer is null")) ||
+         !Common::failIfNull(timeoutMs, error, QStringLiteral("system.run internal error: output pointer is null")) ||
+         !Common::failIfNull(needsScreenRecording, error, QStringLiteral("system.run internal error: output pointer is null")) ||
+         !Common::failIfNull(environment, error, QStringLiteral("system.run internal error: output pointer is null")) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run internal error: output pointer is null");
-        }
         return false;
     }
 
@@ -272,17 +265,9 @@ bool SystemRun::execute(
     bool *invalidParams
 )
 {
-    if ( invalidParams != nullptr )
+    Common::resetInvalidParams(invalidParams);
+    if ( !Common::failIfNull(result, error, QStringLiteral("system.run output pointer is null")) )
     {
-        *invalidParams = false;
-    }
-
-    if ( result == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run output pointer is null");
-        }
         return false;
     }
 
@@ -306,15 +291,7 @@ bool SystemRun::execute(
             &parseError
         ) )
     {
-        if ( invalidParams != nullptr )
-        {
-            *invalidParams = true;
-        }
-        if ( error != nullptr )
-        {
-            *error = parseError;
-        }
-        return false;
+        return Common::failInvalidParams(invalidParams, error, parseError);
     }
 
     if ( invokeTimeoutMs >= 0 )
