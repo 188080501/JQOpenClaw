@@ -75,7 +75,7 @@ bool parseClipboardRequest(
                 QStringLiteral("text"),
                 writeText,
                 &parseError,
-                QString(),
+                QStringLiteral("system.clipboard write"),
                 false,
                 true,
                 false
@@ -83,14 +83,7 @@ bool parseClipboardRequest(
         {
             if ( error != nullptr )
             {
-                if ( parseError == QStringLiteral("requires text") )
-                {
-                    *error = QStringLiteral("system.clipboard write requires text");
-                }
-                else
-                {
-                    *error = QStringLiteral("system.clipboard %1").arg(parseError);
-                }
+                *error = parseError;
             }
             return false;
         }

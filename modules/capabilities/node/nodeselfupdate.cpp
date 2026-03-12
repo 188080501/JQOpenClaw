@@ -293,8 +293,8 @@ bool NodeSelfUpdate::execute(
             QStringLiteral("url"),
             &downloadUrlText,
             &parseError,
-            QString(),
-            QStringLiteral("node.selfUpdate requires downloadUrl")
+            QStringLiteral("node.selfUpdate"),
+            QStringLiteral("requires downloadUrl")
         ) )
     {
         if ( invalidParams != nullptr )

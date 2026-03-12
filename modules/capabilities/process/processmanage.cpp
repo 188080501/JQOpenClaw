@@ -170,7 +170,8 @@ bool parseManageRequest(
             QStringLiteral("query"),
             QStringLiteral("keyword"),
             &request->query,
-            error
+            error,
+            QStringLiteral("process.manage")
         ) )
     {
         return false;

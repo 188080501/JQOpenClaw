@@ -306,14 +306,45 @@ bool Common::parseOptionalTrimmedStringAlias(
     }
 
     value->clear();
-    const QString primaryValue = extractStringTrimmed(paramsObject, primaryField);
-    if ( !primaryValue.isEmpty() )
+    const QJsonValue primaryValue = paramsObject.value(primaryField);
+    if ( !primaryValue.isUndefined() && !primaryValue.isNull() )
     {
-        *value = primaryValue;
-        return true;
+        if ( !primaryValue.isString() )
+        {
+            if ( error != nullptr )
+            {
+                *error = scopedMessage(
+                    scope,
+                    QStringLiteral("%1 must be string").arg(primaryField)
+                );
+            }
+            return false;
+        }
+
+        const QString parsedPrimaryValue = primaryValue.toString().trimmed();
+        if ( !parsedPrimaryValue.isEmpty() )
+        {
+            *value = parsedPrimaryValue;
+            return true;
+        }
     }
 
-    *value = extractStringTrimmed(paramsObject, aliasField);
+    const QJsonValue aliasValue = paramsObject.value(aliasField);
+    if ( !aliasValue.isUndefined() && !aliasValue.isNull() )
+    {
+        if ( !aliasValue.isString() )
+        {
+            if ( error != nullptr )
+            {
+                *error = scopedMessage(
+                    scope,
+                    QStringLiteral("%1 must be string").arg(aliasField)
+                );
+            }
+            return false;
+        }
+        *value = aliasValue.toString().trimmed();
+    }
     return true;
 }
 
@@ -344,7 +375,7 @@ bool Common::parseRequiredTrimmedStringAlias(
         if ( error != nullptr )
         {
             const QString message = missingMessage.trimmed().isEmpty()
-                ? QStringLiteral("%1 is required").arg(primaryField)
+                ? QStringLiteral("requires %1").arg(primaryField)
                 : missingMessage;
             *error = scopedMessage(scope, message);
         }
@@ -1398,19 +1429,13 @@ bool Common::parseOptionalInt64Alias(
     const QJsonValue primaryValue = paramsObject.value(primaryField);
     if ( !primaryValue.isUndefined() && !primaryValue.isNull() )
     {
-        if ( !parseInt64Value(primaryValue, primaryField, minValue, maxValue, value, error, scope) )
-        {
-            return false;
-        }
+        return parseInt64Value(primaryValue, primaryField, minValue, maxValue, value, error, scope);
     }
 
     const QJsonValue aliasValue = paramsObject.value(aliasField);
     if ( !aliasValue.isUndefined() && !aliasValue.isNull() )
     {
-        if ( !parseInt64Value(aliasValue, aliasField, minValue, maxValue, value, error, scope) )
-        {
-            return false;
-        }
+        return parseInt64Value(aliasValue, aliasField, minValue, maxValue, value, error, scope);
     }
 
     return true;
@@ -1443,7 +1468,7 @@ bool Common::parseRequiredInt64Alias(
     {
         *error = scopedMessage(
             scope,
-            QStringLiteral("%1 is required").arg(primaryField)
+            QStringLiteral("requires %1").arg(primaryField)
         );
     }
     return false;
@@ -1518,14 +1543,18 @@ bool Common::parseEncoding(
     const QJsonObject &paramsObject,
     const QString &field,
     ContentEncoding *encoding,
-    QString *error
+    QString *error,
+    const QString &scope
 )
 {
     if ( encoding == nullptr )
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("internal error: encoding output pointer is null");
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: encoding output pointer is null")
+            );
         }
         return false;
     }
@@ -1540,7 +1569,10 @@ bool Common::parseEncoding(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("%1 must be string").arg(field);
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be string").arg(field)
+            );
         }
         return false;
     }
@@ -1559,7 +1591,10 @@ bool Common::parseEncoding(
 
     if ( error != nullptr )
     {
-        *error = QStringLiteral("%1 must be utf8 or base64").arg(field);
+        *error = scopedMessage(
+            scope,
+            QStringLiteral("%1 must be utf8 or base64").arg(field)
+        );
     }
     return false;
 }
@@ -1704,7 +1739,7 @@ bool Common::parseProcessEnvironment(
             if ( !warningPrefix.isEmpty() )
             {
                 qWarning().noquote() << QStringLiteral(
-                    "%1 ignore environment override key=%2"
+                    "%1 skip environment key=%2 reason=path_override"
                 ).arg(
                     warningPrefix,
                     key
@@ -1718,7 +1753,7 @@ bool Common::parseProcessEnvironment(
             if ( !warningPrefix.isEmpty() )
             {
                 qWarning().noquote() << QStringLiteral(
-                    "%1 ignore unsafe environment key=%2"
+                    "%1 skip environment key=%2 reason=unsafe_key"
                 ).arg(
                     warningPrefix,
                     key

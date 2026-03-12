@@ -65,7 +65,8 @@ bool parseWriteOperation(
             QStringLiteral("operation"),
             QStringLiteral("write"),
             &normalized,
-            error
+            error,
+            QStringLiteral("file.write")
         ) )
     {
         return false;
@@ -379,7 +380,7 @@ bool FileWriteAccess::write(
         return Common::failInvalidParams(
             invalidParams,
             error,
-            QStringLiteral("file.write path is required")
+            QStringLiteral("file.write requires path")
         );
     }
 
@@ -418,8 +419,8 @@ bool FileWriteAccess::write(
                 QStringLiteral("toPath"),
                 &destinationPath,
                 &parseError,
-                QString(),
-                QStringLiteral("file.write move requires destinationPath or toPath")
+                QStringLiteral("file.write"),
+                QStringLiteral("move requires destinationPath or toPath")
             ) )
         {
             return Common::failInvalidParams(invalidParams, error, parseError);
@@ -837,7 +838,8 @@ bool FileWriteAccess::write(
             paramsObject,
             QStringLiteral("encoding"),
             &encoding,
-            &parseError
+            &parseError,
+            QStringLiteral("file.write")
         ) )
     {
         return Common::failInvalidParams(invalidParams, error, parseError);

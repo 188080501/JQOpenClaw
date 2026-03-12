@@ -308,7 +308,8 @@ bool parseEncoding(
     const QJsonObject &paramsObject,
     const QString &field,
     ContentEncoding *encoding,
-    QString *error
+    QString *error,
+    const QString &scope = QString()
 );
 
 bool parseOptionalBool(

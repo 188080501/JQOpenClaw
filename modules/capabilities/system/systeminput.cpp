@@ -426,7 +426,7 @@ bool parseInputAction(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.input actions[%1].type is required").arg(index);
+            *error = QStringLiteral("system.input actions[%1] requires type").arg(index);
         }
         return false;
     }
@@ -709,7 +709,7 @@ bool parseInputAction(
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("system.input actions[%1] keyboard key is required").arg(index);
+                *error = QStringLiteral("system.input actions[%1] keyboard requires key").arg(index);
             }
             return false;
         }

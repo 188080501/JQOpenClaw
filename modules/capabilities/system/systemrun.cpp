@@ -60,7 +60,7 @@ bool parseCommand(
     {
         if ( error != nullptr )
         {
-            *error = QStringLiteral("system.run command is required");
+            *error = QStringLiteral("system.run requires command");
         }
         return false;
     }

@@ -272,7 +272,8 @@ bool parseReadOperation(
             QStringLiteral("operation"),
             QStringLiteral("read"),
             &normalized,
-            error
+            error,
+            QStringLiteral("file.read")
         ) )
     {
         return false;
@@ -340,7 +341,7 @@ bool parseReadOffsetBytes(
             0,
             offsetBytes,
             error,
-            QString()
+            QStringLiteral("file.read")
         ) )
     {
         return false;
@@ -374,7 +375,7 @@ bool parseReadLineBoundary(
         std::numeric_limits<qint64>::max(),
         lineValue,
         error,
-        QString()
+        QStringLiteral("file.read")
     );
 }
 
@@ -762,7 +763,7 @@ bool FileReadAccess::read(
         return Common::failInvalidParams(
             invalidParams,
             error,
-            QStringLiteral("file.read path is required")
+            QStringLiteral("file.read requires path")
         );
     }
 
@@ -1041,7 +1042,8 @@ bool FileReadAccess::read(
                 paramsObject,
                 QStringLiteral("encoding"),
                 &encoding,
-                &parseError
+                &parseError,
+                QStringLiteral("file.read")
             ) )
         {
             return Common::failInvalidParams(invalidParams, error, parseError);
@@ -1193,7 +1195,7 @@ bool FileReadAccess::read(
             return Common::failInvalidParams(
                 invalidParams,
                 error,
-                QStringLiteral("file.read rg pattern is required")
+                QStringLiteral("file.read rg requires pattern")
             );
         }
 
@@ -1654,7 +1656,8 @@ bool FileReadAccess::read(
             paramsObject,
             QStringLiteral("encoding"),
             &encoding,
-            &parseError
+            &parseError,
+            QStringLiteral("file.read")
         ) )
     {
         return Common::failInvalidParams(invalidParams, error, parseError);
