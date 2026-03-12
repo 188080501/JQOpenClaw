@@ -271,6 +271,89 @@ QString Common::extractStringTrimmed(const QJsonObject &object, const QString &k
     return extractStringRaw(object, key).trimmed();
 }
 
+QString Common::extractFirstStringTrimmed(const QJsonObject &object, const QStringList &keys)
+{
+    for ( const QString &key : keys )
+    {
+        const QString value = extractStringTrimmed(object, key);
+        if ( !value.isEmpty() )
+        {
+            return value;
+        }
+    }
+    return QString();
+}
+
+bool Common::parseOptionalTrimmedStringAlias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    QString *value,
+    QString *error,
+    const QString &scope
+)
+{
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 output pointer is null").arg(primaryField)
+            );
+        }
+        return false;
+    }
+
+    value->clear();
+    const QString primaryValue = extractStringTrimmed(paramsObject, primaryField);
+    if ( !primaryValue.isEmpty() )
+    {
+        *value = primaryValue;
+        return true;
+    }
+
+    *value = extractStringTrimmed(paramsObject, aliasField);
+    return true;
+}
+
+bool Common::parseRequiredTrimmedStringAlias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    QString *value,
+    QString *error,
+    const QString &scope,
+    const QString &missingMessage
+)
+{
+    if ( !parseOptionalTrimmedStringAlias(
+            paramsObject,
+            primaryField,
+            aliasField,
+            value,
+            error,
+            scope
+        ) )
+    {
+        return false;
+    }
+
+    if ( value->isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            const QString message = missingMessage.trimmed().isEmpty()
+                ? QStringLiteral("%1 is required").arg(primaryField)
+                : missingMessage;
+            *error = scopedMessage(scope, message);
+        }
+        return false;
+    }
+
+    return true;
+}
+
 bool Common::parseParamsObject(
     const QJsonValue &params,
     QJsonObject *paramsObject,
@@ -327,6 +410,24 @@ bool Common::parseOptionalString(
     );
 }
 
+bool Common::parseOptionalTrimmedString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope
+)
+{
+    return parseOptionalString(
+        paramsObject,
+        field,
+        value,
+        error,
+        scope,
+        true
+    );
+}
+
 bool Common::parseRequiredString(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -351,6 +452,27 @@ bool Common::parseRequiredString(
     );
 }
 
+bool Common::parseRequiredTrimmedString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope,
+    bool missingAsTypeError
+)
+{
+    return parseRequiredString(
+        paramsObject,
+        field,
+        value,
+        error,
+        scope,
+        true,
+        false,
+        missingAsTypeError
+    );
+}
+
 bool Common::parseOptionalStringArray(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -369,6 +491,155 @@ bool Common::parseOptionalStringArray(
     );
 }
 
+bool Common::parseOptionalTrimmedStringArray(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QStringList *out,
+    QString *error,
+    const QString &scope,
+    bool skipEmpty
+)
+{
+    if ( out == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 output pointer is null").arg(field)
+            );
+        }
+        return false;
+    }
+
+    QStringList rawValues;
+    if ( !parseOptionalStringArray(paramsObject, field, &rawValues, error, scope) )
+    {
+        return false;
+    }
+
+    out->clear();
+    for ( int index = 0; index < rawValues.size(); ++index )
+    {
+        const QString parsedValue = rawValues.at(index).trimmed();
+        if ( parsedValue.isEmpty() )
+        {
+            if ( skipEmpty )
+            {
+                continue;
+            }
+            if ( error != nullptr )
+            {
+                *error = scopedMessage(
+                    scope,
+                    QStringLiteral("%1[%2] must not be empty").arg(field).arg(index)
+                );
+            }
+            return false;
+        }
+        out->append(parsedValue);
+    }
+    return true;
+}
+
+bool Common::parseOptionalStringOrStringArray(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QStringList *out,
+    QString *error,
+    const QString &scope,
+    bool trim,
+    bool skipEmpty
+)
+{
+    if ( out == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 output pointer is null").arg(field)
+            );
+        }
+        return false;
+    }
+
+    out->clear();
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() || rawValue.isNull() )
+    {
+        return true;
+    }
+
+    const auto appendString =
+        [ field, error, scope, trim, skipEmpty, out ](const QString &sourceValue, int index) -> bool
+        {
+            QString parsedValue = sourceValue;
+            if ( trim )
+            {
+                parsedValue = parsedValue.trimmed();
+            }
+            if ( parsedValue.isEmpty() )
+            {
+                if ( skipEmpty )
+                {
+                    return true;
+                }
+                if ( error != nullptr )
+                {
+                    *error = scopedMessage(
+                        scope,
+                        ( index < 0 )
+                            ? QStringLiteral("%1 must not be empty").arg(field)
+                            : QStringLiteral("%1[%2] must not be empty").arg(field).arg(index)
+                    );
+                }
+                return false;
+            }
+            out->append(parsedValue);
+            return true;
+        };
+
+    if ( rawValue.isString() )
+    {
+        return appendString(rawValue.toString(), -1);
+    }
+
+    if ( !rawValue.isArray() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be string or string array").arg(field)
+            );
+        }
+        return false;
+    }
+
+    const QJsonArray rawArray = rawValue.toArray();
+    for ( int index = 0; index < rawArray.size(); ++index )
+    {
+        const QJsonValue itemValue = rawArray.at(index);
+        if ( !itemValue.isString() )
+        {
+            if ( error != nullptr )
+            {
+                *error = scopedMessage(
+                    scope,
+                    QStringLiteral("%1[%2] must be string").arg(field).arg(index)
+                );
+            }
+            return false;
+        }
+        if ( !appendString(itemValue.toString(), index) )
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool Common::parseRequiredStringArray(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -385,6 +656,88 @@ bool Common::parseRequiredStringArray(
         error,
         scope
     );
+}
+
+bool Common::parseRequiredObjectArray(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    int minCount,
+    int maxCount,
+    QJsonArray *out,
+    QString *error,
+    const QString &scope
+)
+{
+    if ( out == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 output pointer is null").arg(field)
+            );
+        }
+        return false;
+    }
+
+    *out = QJsonArray();
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() || rawValue.isNull() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("requires %1").arg(field)
+            );
+        }
+        return false;
+    }
+    if ( !rawValue.isArray() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be array").arg(field)
+            );
+        }
+        return false;
+    }
+
+    const QJsonArray arrayValue = rawValue.toArray();
+    if ( ( arrayValue.size() < minCount ) || ( arrayValue.size() > maxCount ) )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 count out of range [%2, %3]")
+                    .arg(field)
+                    .arg(minCount)
+                    .arg(maxCount)
+            );
+        }
+        return false;
+    }
+
+    for ( int index = 0; index < arrayValue.size(); ++index )
+    {
+        if ( !arrayValue.at(index).isObject() )
+        {
+            if ( error != nullptr )
+            {
+                *error = scopedMessage(
+                    scope,
+                    QStringLiteral("%1[%2] must be object").arg(field).arg(index)
+                );
+            }
+            return false;
+        }
+    }
+
+    *out = arrayValue;
+    return true;
 }
 
 bool Common::parseJsonObject(
@@ -759,6 +1112,52 @@ bool Common::parseOptionalInt(
     return parseIntValue(rawValue, field, minValue, maxValue, value, error, style, scope);
 }
 
+bool Common::parseOptionalIntWithPresence(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    int minValue,
+    int maxValue,
+    int defaultValue,
+    int *value,
+    bool *hasValue,
+    QString *error,
+    IntegerParseStyle style,
+    const QString &scope
+)
+{
+    if ( hasValue == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 presence output pointer is null").arg(field)
+            );
+        }
+        return false;
+    }
+
+    *hasValue = false;
+    if ( !parseOptionalInt(
+            paramsObject,
+            field,
+            minValue,
+            maxValue,
+            defaultValue,
+            value,
+            error,
+            style,
+            scope
+        ) )
+    {
+        return false;
+    }
+
+    const QJsonValue rawValue = paramsObject.value(field);
+    *hasValue = !rawValue.isUndefined() && !rawValue.isNull();
+    return true;
+}
+
 bool Common::parseRequiredInt(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -784,6 +1183,295 @@ bool Common::parseRequiredInt(
     }
 
     return parseIntValue(rawValue, field, minValue, maxValue, value, error, style, scope);
+}
+
+bool Common::parseInt64Value(
+    const QJsonValue &rawValue,
+    const QString &field,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope
+)
+{
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: integer output pointer is null")
+            );
+        }
+        return false;
+    }
+
+    if ( !rawValue.isDouble() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be number").arg(field)
+            );
+        }
+        return false;
+    }
+
+    const double doubleValue = rawValue.toDouble(std::numeric_limits<double>::quiet_NaN());
+    if ( !std::isfinite(doubleValue) )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be integer within [%2, %3]")
+                    .arg(field)
+                    .arg(minValue)
+                    .arg(maxValue)
+            );
+        }
+        return false;
+    }
+
+    if ( ( doubleValue < static_cast<double>(minValue) ) ||
+         ( doubleValue > static_cast<double>(maxValue) ) )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be integer within [%2, %3]")
+                    .arg(field)
+                    .arg(minValue)
+                    .arg(maxValue)
+            );
+        }
+        return false;
+    }
+
+    const qint64 parsedValue = static_cast<qint64>(doubleValue);
+    if ( doubleValue != static_cast<double>(parsedValue) )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be integer within [%2, %3]")
+                    .arg(field)
+                    .arg(minValue)
+                    .arg(maxValue)
+            );
+        }
+        return false;
+    }
+
+    *value = parsedValue;
+    return true;
+}
+
+bool Common::parseOptionalInt64(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 defaultValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope
+)
+{
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: integer output pointer is null")
+            );
+        }
+        return false;
+    }
+
+    *value = defaultValue;
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() || rawValue.isNull() )
+    {
+        return true;
+    }
+
+    return parseInt64Value(rawValue, field, minValue, maxValue, value, error, scope);
+}
+
+bool Common::parseRequiredInt64(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope
+)
+{
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() || rawValue.isNull() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("requires %1").arg(field)
+            );
+        }
+        return false;
+    }
+
+    return parseInt64Value(rawValue, field, minValue, maxValue, value, error, scope);
+}
+
+bool Common::parseOptionalInt64Alias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 defaultValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope
+)
+{
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: integer output pointer is null")
+            );
+        }
+        return false;
+    }
+
+    *value = defaultValue;
+    const QJsonValue primaryValue = paramsObject.value(primaryField);
+    if ( !primaryValue.isUndefined() && !primaryValue.isNull() )
+    {
+        if ( !parseInt64Value(primaryValue, primaryField, minValue, maxValue, value, error, scope) )
+        {
+            return false;
+        }
+    }
+
+    const QJsonValue aliasValue = paramsObject.value(aliasField);
+    if ( !aliasValue.isUndefined() && !aliasValue.isNull() )
+    {
+        if ( !parseInt64Value(aliasValue, aliasField, minValue, maxValue, value, error, scope) )
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool Common::parseRequiredInt64Alias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope
+)
+{
+    const QJsonValue primaryValue = paramsObject.value(primaryField);
+    if ( !primaryValue.isUndefined() && !primaryValue.isNull() )
+    {
+        return parseInt64Value(primaryValue, primaryField, minValue, maxValue, value, error, scope);
+    }
+
+    const QJsonValue aliasValue = paramsObject.value(aliasField);
+    if ( !aliasValue.isUndefined() && !aliasValue.isNull() )
+    {
+        return parseInt64Value(aliasValue, aliasField, minValue, maxValue, value, error, scope);
+    }
+
+    if ( error != nullptr )
+    {
+        *error = scopedMessage(
+            scope,
+            QStringLiteral("%1 is required").arg(primaryField)
+        );
+    }
+    return false;
+}
+
+bool Common::parseOptionalToken(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    const QString &defaultValue,
+    QString *token,
+    QString *error,
+    const QString &scope,
+    bool normalize
+)
+{
+    if ( token == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 output pointer is null").arg(field)
+            );
+        }
+        return false;
+    }
+
+    *token = defaultValue;
+    const QJsonValue rawValue = paramsObject.value(field);
+    if ( rawValue.isUndefined() )
+    {
+        return true;
+    }
+    if ( rawValue.isNull() || !rawValue.isString() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must be string").arg(field)
+            );
+        }
+        return false;
+    }
+
+    QString parsedValue;
+    if ( normalize )
+    {
+        parsedValue = normalizeToken(rawValue.toString());
+    }
+    else
+    {
+        parsedValue = rawValue.toString().trimmed().toLower();
+    }
+    if ( parsedValue.isEmpty() )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("%1 must not be empty").arg(field)
+            );
+        }
+        return false;
+    }
+
+    *token = parsedValue;
+    return true;
 }
 
 bool Common::parseEncoding(

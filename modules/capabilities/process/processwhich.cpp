@@ -110,13 +110,12 @@ bool parsePrograms(
     const QJsonValue programValue = paramsObject.value(QStringLiteral("program"));
     const bool hasProgram = !programValue.isUndefined() && !programValue.isNull();
     QString program;
-    if ( !Common::parseOptionalString(
+    if ( !Common::parseOptionalTrimmedString(
             paramsObject,
             QStringLiteral("program"),
             &program,
             error,
-            QStringLiteral("process.which"),
-            true
+            QStringLiteral("process.which")
         ) )
     {
         return false;
@@ -135,31 +134,37 @@ bool parsePrograms(
     }
 
     QStringList parsedPrograms;
-    if ( !Common::parseOptionalStringArray(
+    QString parseProgramsError;
+    if ( !Common::parseOptionalTrimmedStringArray(
             paramsObject,
             QStringLiteral("programs"),
             &parsedPrograms,
-            error,
+            &parseProgramsError,
             QStringLiteral("process.which")
         ) )
     {
+        if ( error != nullptr )
+        {
+            const QString prefix = QStringLiteral("process.which programs[");
+            const QString suffix = QStringLiteral("] must not be empty");
+            if ( parseProgramsError.startsWith(prefix) &&
+                 parseProgramsError.endsWith(suffix) )
+            {
+                const QString indexText = parseProgramsError.mid(
+                    prefix.size(),
+                    parseProgramsError.size() - prefix.size() - suffix.size()
+                );
+                *error = QStringLiteral("process.which programs[%1] is empty").arg(indexText);
+            }
+            else
+            {
+                *error = parseProgramsError;
+            }
+        }
         return false;
     }
 
-    for ( int i = 0; i < parsedPrograms.size(); ++i )
-    {
-        const QString program = parsedPrograms.at(i).trimmed();
-        if ( program.isEmpty() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("process.which programs[%1] is empty").arg(i);
-            }
-            return false;
-        }
-
-        programs->append(program);
-    }
+    programs->append(parsedPrograms);
 
     if ( programs->isEmpty() )
     {

@@ -266,27 +266,15 @@ bool parseReadOperation(
     }
 
     *operation = FileReadOperation::Read;
-    const QJsonValue value = paramsObject.value(QStringLiteral("operation"));
-    if ( value.isUndefined() )
+    QString normalized;
+    if ( !Common::parseOptionalToken(
+            paramsObject,
+            QStringLiteral("operation"),
+            QStringLiteral("read"),
+            &normalized,
+            error
+        ) )
     {
-        return true;
-    }
-    if ( value.isNull() || !value.isString() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("operation must be string");
-        }
-        return false;
-    }
-
-    const QString normalized = Common::normalizeToken(value.toString());
-    if ( normalized.isEmpty() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("operation must not be empty");
-        }
         return false;
     }
     if ( normalized == QStringLiteral("read") )
@@ -328,69 +316,6 @@ bool parseReadOperation(
     }
     return false;
 }
-bool parseIntegerField(
-    const QJsonObject &paramsObject,
-    const QString &field,
-    qint64 defaultValue,
-    qint64 minValue,
-    qint64 maxValue,
-    qint64 *out,
-    QString *error
-)
-{
-    if ( out == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("file capability internal error: integer output pointer is null");
-        }
-        return false;
-    }
-
-    *out = defaultValue;
-    const QJsonValue value = paramsObject.value(field);
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("%1 must be number").arg(field);
-        }
-        return false;
-    }
-
-    const double raw = value.toDouble();
-    if ( ( raw < static_cast<double>(minValue) ) ||
-         ( raw > static_cast<double>(maxValue) ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "%1 must be integer within [%2, %3]"
-            ).arg(field).arg(minValue).arg(maxValue);
-        }
-        return false;
-    }
-
-    const qint64 parsed = static_cast<qint64>(raw);
-    if ( raw != static_cast<double>(parsed) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "%1 must be integer within [%2, %3]"
-            ).arg(field).arg(minValue).arg(maxValue);
-        }
-        return false;
-    }
-
-    *out = parsed;
-    return true;
-}
-
 bool parseReadOffsetBytes(
     const QJsonObject &paramsObject,
     qint64 *offsetBytes,
@@ -406,57 +331,19 @@ bool parseReadOffsetBytes(
         return false;
     }
 
-    if ( !parseIntegerField(
+    if ( !Common::parseOptionalInt64Alias(
             paramsObject,
             QStringLiteral("offsetBytes"),
-            0,
+            QStringLiteral("offset"),
             0,
             std::numeric_limits<qint64>::max(),
+            0,
             offsetBytes,
-            error
+            error,
+            QString()
         ) )
     {
         return false;
-    }
-
-    const QJsonValue offsetAlias = paramsObject.value(QStringLiteral("offset"));
-    if ( !offsetAlias.isUndefined() && !offsetAlias.isNull() )
-    {
-        if ( !offsetAlias.isDouble() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("offset must be number");
-            }
-            return false;
-        }
-
-        const double raw = offsetAlias.toDouble();
-        if ( ( raw < 0.0 ) ||
-             ( raw > static_cast<double>(std::numeric_limits<qint64>::max()) ) )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral(
-                    "offset must be integer within [0, %1]"
-                ).arg(std::numeric_limits<qint64>::max());
-            }
-            return false;
-        }
-
-        const qint64 parsed = static_cast<qint64>(raw);
-        if ( raw != static_cast<double>(parsed) )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral(
-                    "offset must be integer within [0, %1]"
-                ).arg(std::numeric_limits<qint64>::max());
-            }
-            return false;
-        }
-
-        *offsetBytes = parsed;
     }
 
     return true;
@@ -479,57 +366,16 @@ bool parseReadLineBoundary(
         return false;
     }
 
-    const QJsonValue primaryValue = paramsObject.value(primaryField);
-    const QJsonValue aliasValue = paramsObject.value(aliasField);
-    const bool hasPrimary = !primaryValue.isUndefined() && !primaryValue.isNull();
-    const bool hasAlias = !aliasValue.isUndefined() && !aliasValue.isNull();
-    if ( !hasPrimary && !hasAlias )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("%1 is required").arg(primaryField);
-        }
-        return false;
-    }
-
-    const QJsonValue targetValue = hasPrimary ? primaryValue : aliasValue;
-    const QString valueField = hasPrimary ? primaryField : aliasField;
-    if ( !targetValue.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("%1 must be number").arg(valueField);
-        }
-        return false;
-    }
-
-    const double raw = targetValue.toDouble();
-    if ( ( raw < 1.0 ) ||
-         ( raw > static_cast<double>(std::numeric_limits<qint64>::max()) ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "%1 must be integer within [1, %2]"
-            ).arg(valueField).arg(std::numeric_limits<qint64>::max());
-        }
-        return false;
-    }
-
-    const qint64 parsed = static_cast<qint64>(raw);
-    if ( raw != static_cast<double>(parsed) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "%1 must be integer within [1, %2]"
-            ).arg(valueField).arg(std::numeric_limits<qint64>::max());
-        }
-        return false;
-    }
-
-    *lineValue = parsed;
-    return true;
+    return Common::parseRequiredInt64Alias(
+        paramsObject,
+        primaryField,
+        aliasField,
+        1,
+        std::numeric_limits<qint64>::max(),
+        lineValue,
+        error,
+        QString()
+    );
 }
 
 bool parseGlobPatterns(
@@ -550,20 +396,12 @@ bool parseGlobPatterns(
     globPatterns->clear();
 
     const QJsonValue globValue = paramsObject.value(QStringLiteral("glob"));
-    if ( globValue.isString() )
+    if ( globValue.isArray() )
     {
-        const QString pattern = globValue.toString().trimmed();
-        if ( !pattern.isEmpty() )
+        const QJsonArray rawPatterns = globValue.toArray();
+        for ( const QJsonValue &rawPattern : rawPatterns )
         {
-            globPatterns->append(pattern);
-        }
-    }
-    else if ( globValue.isArray() )
-    {
-        const QJsonArray patterns = globValue.toArray();
-        for ( const QJsonValue &patternValue : patterns )
-        {
-            if ( !patternValue.isString() )
+            if ( !rawPattern.isString() )
             {
                 if ( error != nullptr )
                 {
@@ -571,39 +409,31 @@ bool parseGlobPatterns(
                 }
                 return false;
             }
-
-            const QString pattern = patternValue.toString().trimmed();
-            if ( !pattern.isEmpty() )
-            {
-                globPatterns->append(pattern);
-            }
         }
     }
-    else if ( !globValue.isUndefined() && !globValue.isNull() )
+
+    QStringList parsedGlob;
+    if ( !Common::parseOptionalStringOrStringArray(
+            paramsObject,
+            QStringLiteral("glob"),
+            &parsedGlob,
+            error,
+            QString(),
+            true,
+            true
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("glob must be string or string array");
-        }
         return false;
     }
+    globPatterns->append(parsedGlob);
 
     const QJsonValue globPatternsValue = paramsObject.value(QStringLiteral("globPatterns"));
-    if ( !globPatternsValue.isUndefined() && !globPatternsValue.isNull() )
+    if ( globPatternsValue.isArray() )
     {
-        if ( !globPatternsValue.isArray() )
+        const QJsonArray rawPatterns = globPatternsValue.toArray();
+        for ( const QJsonValue &rawPattern : rawPatterns )
         {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("globPatterns must be string array");
-            }
-            return false;
-        }
-
-        const QJsonArray patterns = globPatternsValue.toArray();
-        for ( const QJsonValue &patternValue : patterns )
-        {
-            if ( !patternValue.isString() )
+            if ( !rawPattern.isString() )
             {
                 if ( error != nullptr )
                 {
@@ -611,14 +441,22 @@ bool parseGlobPatterns(
                 }
                 return false;
             }
-
-            const QString pattern = patternValue.toString().trimmed();
-            if ( !pattern.isEmpty() )
-            {
-                globPatterns->append(pattern);
-            }
         }
     }
+
+    QStringList parsedGlobPatterns;
+    if ( !Common::parseOptionalTrimmedStringArray(
+            paramsObject,
+            QStringLiteral("globPatterns"),
+            &parsedGlobPatterns,
+            error,
+            QString(),
+            true
+        ) )
+    {
+        return false;
+    }
+    globPatterns->append(parsedGlobPatterns);
 
     return true;
 }
@@ -819,48 +657,16 @@ bool parseReadMaxBytes(
         return false;
     }
 
-    *maxBytes = defaultReadMaxBytes;
-    const QJsonValue value = paramsObject.value(QStringLiteral("maxBytes"));
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("maxBytes must be number");
-        }
-        return false;
-    }
-
-    const double raw = value.toDouble();
-    if ( ( raw < 1.0 ) ||
-         ( raw > static_cast<double>(maxReadMaxBytes) ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "maxBytes must be integer within [1, %1]"
-            ).arg(maxReadMaxBytes);
-        }
-        return false;
-    }
-
-    const qint64 parsed = static_cast<qint64>(raw);
-    if ( raw != static_cast<double>(parsed) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "maxBytes must be integer within [1, %1]"
-            ).arg(maxReadMaxBytes);
-        }
-        return false;
-    }
-
-    *maxBytes = parsed;
-    return true;
+    return Common::parseOptionalInt64(
+        paramsObject,
+        QStringLiteral("maxBytes"),
+        1,
+        maxReadMaxBytes,
+        defaultReadMaxBytes,
+        maxBytes,
+        error,
+        QString()
+    );
 }
 
 bool parseReadMaxEntries(
@@ -878,48 +684,16 @@ bool parseReadMaxEntries(
         return false;
     }
 
-    *maxEntries = defaultReadMaxEntries;
-    const QJsonValue value = paramsObject.value(QStringLiteral("maxEntries"));
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("maxEntries must be number");
-        }
-        return false;
-    }
-
-    const double raw = value.toDouble();
-    if ( ( raw < 1.0 ) ||
-         ( raw > static_cast<double>(maxReadMaxEntries) ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "maxEntries must be integer within [1, %1]"
-            ).arg(maxReadMaxEntries);
-        }
-        return false;
-    }
-
-    const qint64 parsed = static_cast<qint64>(raw);
-    if ( raw != static_cast<double>(parsed) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "maxEntries must be integer within [1, %1]"
-            ).arg(maxReadMaxEntries);
-        }
-        return false;
-    }
-
-    *maxEntries = parsed;
-    return true;
+    return Common::parseOptionalInt64(
+        paramsObject,
+        QStringLiteral("maxEntries"),
+        1,
+        maxReadMaxEntries,
+        defaultReadMaxEntries,
+        maxEntries,
+        error,
+        QString()
+    );
 }
 
 bool parseRgMaxMatches(
@@ -937,48 +711,16 @@ bool parseRgMaxMatches(
         return false;
     }
 
-    *maxMatches = defaultRgMaxMatches;
-    const QJsonValue value = paramsObject.value(QStringLiteral("maxMatches"));
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("maxMatches must be number");
-        }
-        return false;
-    }
-
-    const double raw = value.toDouble();
-    if ( ( raw < 1.0 ) ||
-         ( raw > static_cast<double>(maxRgMaxMatches) ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "maxMatches must be integer within [1, %1]"
-            ).arg(maxRgMaxMatches);
-        }
-        return false;
-    }
-
-    const qint64 parsed = static_cast<qint64>(raw);
-    if ( raw != static_cast<double>(parsed) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral(
-                "maxMatches must be integer within [1, %1]"
-            ).arg(maxRgMaxMatches);
-        }
-        return false;
-    }
-
-    *maxMatches = parsed;
-    return true;
+    return Common::parseOptionalInt64(
+        paramsObject,
+        QStringLiteral("maxMatches"),
+        1,
+        maxRgMaxMatches,
+        defaultRgMaxMatches,
+        maxMatches,
+        error,
+        QString()
+    );
 }
 QString encodeContent(const QByteArray &bytes, Common::ContentEncoding encoding)
 {

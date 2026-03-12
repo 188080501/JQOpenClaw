@@ -59,27 +59,15 @@ bool parseWriteOperation(
     }
 
     *operation = FileWriteOperation::Write;
-    const QJsonValue value = paramsObject.value(QStringLiteral("operation"));
-    if ( value.isUndefined() )
+    QString normalized;
+    if ( !Common::parseOptionalToken(
+            paramsObject,
+            QStringLiteral("operation"),
+            QStringLiteral("write"),
+            &normalized,
+            error
+        ) )
     {
-        return true;
-    }
-    if ( value.isNull() || !value.isString() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("operation must be string");
-        }
-        return false;
-    }
-
-    const QString normalized = Common::normalizeToken(value.toString());
-    if ( normalized.isEmpty() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("operation must not be empty");
-        }
         return false;
     }
     if ( normalized == QStringLiteral("write") )
@@ -463,15 +451,16 @@ bool FileWriteAccess::write(
 
     if ( operation == FileWriteOperation::Move )
     {
-        const QString destinationPath = [ &paramsObject ]() {
-            const QString byDestinationPath = Common::extractStringTrimmed(paramsObject, QStringLiteral("destinationPath"));
-            if ( !byDestinationPath.isEmpty() )
-            {
-                return byDestinationPath;
-            }
-            return Common::extractStringTrimmed(paramsObject, QStringLiteral("toPath"));
-        }();
-        if ( destinationPath.isEmpty() )
+        QString destinationPath;
+        if ( !Common::parseRequiredTrimmedStringAlias(
+                paramsObject,
+                QStringLiteral("destinationPath"),
+                QStringLiteral("toPath"),
+                &destinationPath,
+                &parseError,
+                QString(),
+                QStringLiteral("file.write move requires destinationPath or toPath")
+            ) )
         {
             if ( invalidParams != nullptr )
             {
@@ -479,7 +468,7 @@ bool FileWriteAccess::write(
             }
             if ( error != nullptr )
             {
-                *error = QStringLiteral("file.write move requires destinationPath or toPath");
+                *error = parseError;
             }
             return false;
         }
@@ -916,8 +905,17 @@ bool FileWriteAccess::write(
         return true;
     }
 
-    const QJsonValue contentValue = paramsObject.value(QStringLiteral("content"));
-    if ( !contentValue.isString() )
+    QString content;
+    if ( !Common::parseRequiredString(
+            paramsObject,
+            QStringLiteral("content"),
+            &content,
+            &parseError,
+            QStringLiteral("file.write"),
+            false,
+            true,
+            true
+        ) )
     {
         if ( invalidParams != nullptr )
         {
@@ -925,7 +923,7 @@ bool FileWriteAccess::write(
         }
         if ( error != nullptr )
         {
-            *error = QStringLiteral("file.write content must be string");
+            *error = parseError;
         }
         return false;
     }
@@ -990,7 +988,7 @@ bool FileWriteAccess::write(
     }
 
     QByteArray contentBytes;
-    if ( !decodeContent(contentValue.toString(), encoding, &contentBytes, &parseError) )
+    if ( !decodeContent(content, encoding, &contentBytes, &parseError) )
     {
         if ( invalidParams != nullptr )
         {

@@ -45,6 +45,27 @@ QString extractStringRaw(const QJsonObject &object, const QString &key);
 
 QString extractStringTrimmed(const QJsonObject &object, const QString &key);
 
+QString extractFirstStringTrimmed(const QJsonObject &object, const QStringList &keys);
+
+bool parseOptionalTrimmedStringAlias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    QString *value,
+    QString *error = nullptr,
+    const QString &scope = QString()
+);
+
+bool parseRequiredTrimmedStringAlias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    QString *value,
+    QString *error,
+    const QString &scope = QString(),
+    const QString &missingMessage = QString()
+);
+
 bool parseParamsObject(
     const QJsonValue &params,
     QJsonObject *paramsObject,
@@ -61,6 +82,14 @@ bool parseOptionalString(
     bool trim = false
 );
 
+bool parseOptionalTrimmedString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope = QString()
+);
+
 bool parseRequiredString(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -72,6 +101,15 @@ bool parseRequiredString(
     bool missingAsTypeError = false
 );
 
+bool parseRequiredTrimmedString(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QString *value,
+    QString *error,
+    const QString &scope = QString(),
+    bool missingAsTypeError = false
+);
+
 bool parseOptionalStringArray(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -80,10 +118,39 @@ bool parseOptionalStringArray(
     const QString &scope = QString()
 );
 
+bool parseOptionalTrimmedStringArray(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QStringList *out,
+    QString *error,
+    const QString &scope = QString(),
+    bool skipEmpty = false
+);
+
+bool parseOptionalStringOrStringArray(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    QStringList *out,
+    QString *error,
+    const QString &scope = QString(),
+    bool trim = true,
+    bool skipEmpty = false
+);
+
 bool parseRequiredStringArray(
     const QJsonObject &paramsObject,
     const QString &field,
     QStringList *out,
+    QString *error,
+    const QString &scope = QString()
+);
+
+bool parseRequiredObjectArray(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    int minCount,
+    int maxCount,
+    QJsonArray *out,
     QString *error,
     const QString &scope = QString()
 );
@@ -139,6 +206,19 @@ bool parseOptionalInt(
     const QString &scope
 );
 
+bool parseOptionalIntWithPresence(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    int minValue,
+    int maxValue,
+    int defaultValue,
+    int *value,
+    bool *hasValue,
+    QString *error,
+    IntegerParseStyle style,
+    const QString &scope
+);
+
 bool parseRequiredInt(
     const QJsonObject &paramsObject,
     const QString &field,
@@ -148,6 +228,70 @@ bool parseRequiredInt(
     QString *error,
     IntegerParseStyle style,
     const QString &scope
+);
+
+bool parseInt64Value(
+    const QJsonValue &rawValue,
+    const QString &field,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope = QString()
+);
+
+bool parseOptionalInt64(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 defaultValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope = QString()
+);
+
+bool parseRequiredInt64(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope = QString()
+);
+
+bool parseOptionalInt64Alias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 defaultValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope = QString()
+);
+
+bool parseRequiredInt64Alias(
+    const QJsonObject &paramsObject,
+    const QString &primaryField,
+    const QString &aliasField,
+    qint64 minValue,
+    qint64 maxValue,
+    qint64 *value,
+    QString *error,
+    const QString &scope = QString()
+);
+
+bool parseOptionalToken(
+    const QJsonObject &paramsObject,
+    const QString &field,
+    const QString &defaultValue,
+    QString *token,
+    QString *error,
+    const QString &scope = QString(),
+    bool normalize = true
 );
 
 bool parseEncoding(

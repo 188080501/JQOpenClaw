@@ -93,54 +93,41 @@ bool parseManageRequest(
     {
         return false;
     }
-    const QJsonValue operationValue = paramsObject.value(QStringLiteral("operation"));
-    if ( operationValue.isUndefined() )
+    QString operation;
+    if ( !Common::parseOptionalToken(
+            paramsObject,
+            QStringLiteral("operation"),
+            QStringLiteral("list"),
+            &operation,
+            error,
+            QStringLiteral("process.manage"),
+            false
+        ) )
+    {
+        return false;
+    }
+    if ( operation == QStringLiteral("list") )
     {
         request->operation = ProcessManageOperation::List;
         request->operationName = QStringLiteral("list");
     }
-    else if ( operationValue.isNull() || !operationValue.isString() )
+    else if ( operation == QStringLiteral("search") )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("process.manage operation must be string");
-        }
-        return false;
+        request->operation = ProcessManageOperation::Search;
+        request->operationName = QStringLiteral("search");
+    }
+    else if ( operation == QStringLiteral("kill") )
+    {
+        request->operation = ProcessManageOperation::Kill;
+        request->operationName = QStringLiteral("kill");
     }
     else
     {
-        const QString operation = operationValue.toString().trimmed().toLower();
-        if ( operation.isEmpty() )
+        if ( error != nullptr )
         {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("process.manage operation must not be empty");
-            }
-            return false;
+            *error = QStringLiteral("process.manage operation must be one of: list, search, kill");
         }
-        if ( operation == QStringLiteral("list") )
-        {
-            request->operation = ProcessManageOperation::List;
-            request->operationName = QStringLiteral("list");
-        }
-        else if ( operation == QStringLiteral("search") )
-        {
-            request->operation = ProcessManageOperation::Search;
-            request->operationName = QStringLiteral("search");
-        }
-        else if ( operation == QStringLiteral("kill") )
-        {
-            request->operation = ProcessManageOperation::Kill;
-            request->operationName = QStringLiteral("kill");
-        }
-        else
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("process.manage operation must be one of: list, search, kill");
-            }
-            return false;
-        }
+        return false;
     }
 
     if ( request->operation == ProcessManageOperation::Kill )
@@ -182,10 +169,15 @@ bool parseManageRequest(
         );
     }
 
-    request->query = Common::extractStringTrimmed(paramsObject, QStringLiteral("query"));
-    if ( request->query.isEmpty() )
+    if ( !Common::parseOptionalTrimmedStringAlias(
+            paramsObject,
+            QStringLiteral("query"),
+            QStringLiteral("keyword"),
+            &request->query,
+            error
+        ) )
     {
-        request->query = Common::extractStringTrimmed(paramsObject, QStringLiteral("keyword"));
+        return false;
     }
 
     if ( !Common::parseOptionalBool(
@@ -236,23 +228,20 @@ bool parseManageRequest(
         return false;
     }
 
-    const QJsonValue pidValue = paramsObject.value(QStringLiteral("pid"));
-    if ( !pidValue.isUndefined() && !pidValue.isNull() )
+    if ( !Common::parseOptionalIntWithPresence(
+            paramsObject,
+            QStringLiteral("pid"),
+            1,
+            INT_MAX,
+            0,
+            &request->pidFilter,
+            &request->hasPidFilter,
+            error,
+            Common::IntegerParseStyle::Number,
+            QStringLiteral("process.manage")
+        ) )
     {
-        if ( !Common::parseIntValue(
-                pidValue,
-                QStringLiteral("pid"),
-                1,
-                INT_MAX,
-                &request->pidFilter,
-                error,
-                Common::IntegerParseStyle::Number,
-                QStringLiteral("process.manage")
-            ) )
-        {
-            return false;
-        }
-        request->hasPidFilter = true;
+        return false;
     }
 
     if ( ( request->operation == ProcessManageOperation::Search ) &&

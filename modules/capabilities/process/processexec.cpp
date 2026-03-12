@@ -91,8 +91,10 @@ bool parseExecuteRequest(
     {
         return false;
     }
-    const QString command = Common::extractStringTrimmed(paramsObject, QStringLiteral("command"));
-    const QString programValue = Common::extractStringTrimmed(paramsObject, QStringLiteral("program"));
+    const QString command = Common::extractStringTrimmed(
+        paramsObject,
+        QStringLiteral("command")
+    );
     if ( !command.isEmpty() )
     {
         if ( error != nullptr )
@@ -105,6 +107,10 @@ bool parseExecuteRequest(
     }
 
     arguments->clear();
+    const QString programValue = Common::extractStringTrimmed(
+        paramsObject,
+        QStringLiteral("program")
+    );
     if ( programValue.isEmpty() )
     {
         if ( error != nullptr )

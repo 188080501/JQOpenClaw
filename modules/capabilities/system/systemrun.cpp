@@ -127,13 +127,12 @@ bool parseRawCommand(
     QString *error
 )
 {
-    return Common::parseOptionalString(
+    return Common::parseOptionalTrimmedString(
         paramsObject,
         QStringLiteral("rawCommand"),
         rawCommand,
         error,
-        QStringLiteral("system.run"),
-        true
+        QStringLiteral("system.run")
     );
 }
 
@@ -152,23 +151,14 @@ bool parseNeedsScreenRecording(
         return false;
     }
 
-    *needsScreenRecording = false;
-    const QJsonValue value = paramsObject.value(QStringLiteral("needsScreenRecording"));
-    if ( value.isUndefined() || value.isNull() )
-    {
-        return true;
-    }
-    if ( !value.isBool() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run needsScreenRecording must be boolean");
-        }
-        return false;
-    }
-
-    *needsScreenRecording = value.toBool();
-    return true;
+    return Common::parseOptionalBool(
+        paramsObject,
+        QStringLiteral("needsScreenRecording"),
+        false,
+        needsScreenRecording,
+        error,
+        QStringLiteral("system.run")
+    );
 }
 
 bool parseEnvironment(
@@ -258,21 +248,14 @@ bool parseExecuteRequest(
         return false;
     }
 
-    const QJsonValue cwdValue = paramsObject.value(QStringLiteral("cwd"));
-    if ( cwdValue.isUndefined() || cwdValue.isNull() )
+    if ( !Common::parseOptionalTrimmedString(
+            paramsObject,
+            QStringLiteral("cwd"),
+            workingDirectory,
+            error,
+            QStringLiteral("system.run")
+        ) )
     {
-        workingDirectory->clear();
-    }
-    else if ( cwdValue.isString() )
-    {
-        *workingDirectory = cwdValue.toString().trimmed();
-    }
-    else
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.run cwd must be string");
-        }
         return false;
     }
 

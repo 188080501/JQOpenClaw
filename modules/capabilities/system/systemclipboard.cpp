@@ -50,28 +50,17 @@ bool parseClipboardRequest(
     {
         return false;
     }
-    const QJsonValue operationValue = paramsObject.value(QStringLiteral("operation"));
-    if ( operationValue.isUndefined() )
+    QString operationText;
+    if ( !Common::parseOptionalToken(
+            paramsObject,
+            QStringLiteral("operation"),
+            QStringLiteral("read"),
+            &operationText,
+            error,
+            QStringLiteral("system.clipboard"),
+            false
+        ) )
     {
-        *operation = ClipboardOperation::Read;
-        return true;
-    }
-    if ( operationValue.isNull() || !operationValue.isString() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.clipboard operation must be string");
-        }
-        return false;
-    }
-
-    const QString operationText = operationValue.toString().trimmed().toLower();
-    if ( operationText.isEmpty() )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.clipboard operation must not be empty");
-        }
         return false;
     }
 
@@ -83,23 +72,28 @@ bool parseClipboardRequest(
     if ( operationText == QStringLiteral("write") )
     {
         *operation = ClipboardOperation::Write;
-        const QJsonValue textValue = paramsObject.value(QStringLiteral("text"));
-        const bool hasText = !textValue.isUndefined() && !textValue.isNull();
-        if ( !Common::parseOptionalString(
+        QString parseError;
+        if ( !Common::parseRequiredString(
                 paramsObject,
                 QStringLiteral("text"),
                 writeText,
-                error,
-                QStringLiteral("system.clipboard")
+                &parseError,
+                QString(),
+                false,
+                true,
+                false
             ) )
-        {
-            return false;
-        }
-        if ( !hasText )
         {
             if ( error != nullptr )
             {
-                *error = QStringLiteral("system.clipboard write requires text");
+                if ( parseError == QStringLiteral("requires text") )
+                {
+                    *error = QStringLiteral("system.clipboard write requires text");
+                }
+                else
+                {
+                    *error = QStringLiteral("system.clipboard %1").arg(parseError);
+                }
             }
             return false;
         }

@@ -837,7 +837,7 @@ bool parseInputRequest(
         return false;
     }
     const QJsonValue actionsValue = paramsObject.value(QStringLiteral("actions"));
-    if ( !actionsValue.isArray() )
+    if ( actionsValue.isUndefined() || actionsValue.isNull() )
     {
         if ( error != nullptr )
         {
@@ -846,34 +846,25 @@ bool parseInputRequest(
         return false;
     }
 
-    const QJsonArray actionsArray = actionsValue.toArray();
-    if ( ( actionsArray.size() < inputMinActions ) ||
-         ( actionsArray.size() > inputMaxActions ) )
+    QJsonArray actionsArray;
+    if ( !Common::parseRequiredObjectArray(
+            paramsObject,
+            QStringLiteral("actions"),
+            inputMinActions,
+            inputMaxActions,
+            &actionsArray,
+            error,
+            QStringLiteral("system.input")
+        ) )
     {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("system.input actions count out of range [%1, %2]")
-                .arg(inputMinActions)
-                .arg(inputMaxActions);
-        }
         return false;
     }
 
     for ( int index = 0; index < actionsArray.size(); ++index )
     {
-        const QJsonValue actionValue = actionsArray.at(index);
-        if ( !actionValue.isObject() )
-        {
-            if ( error != nullptr )
-            {
-                *error = QStringLiteral("system.input actions[%1] must be object").arg(index);
-            }
-            return false;
-        }
-
         InputActionRequest request;
         QString parseError;
-        if ( !parseInputAction(actionValue.toObject(), index, &request, &parseError) )
+        if ( !parseInputAction(actionsArray.at(index).toObject(), index, &request, &parseError) )
         {
             if ( error != nullptr )
             {

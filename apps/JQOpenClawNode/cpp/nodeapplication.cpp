@@ -509,38 +509,6 @@ bool uploadScreenshotFile(
     return true;
 }
 
-bool parseInvokeTimeoutMs(const QJsonObject &payload, int *timeoutMs, QString *error)
-{
-    if ( timeoutMs == nullptr )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("invoke timeout output pointer is null");
-        }
-        return false;
-    }
-
-    if ( !Common::parseOptionalInt(
-            payload,
-            QStringLiteral("timeoutMs"),
-            0,
-            (std::numeric_limits<int>::max)(),
-            -1,
-            timeoutMs,
-            nullptr,
-            Common::IntegerParseStyle::Integer,
-            QStringLiteral("node.invoke")
-        ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = QStringLiteral("timeoutMs must be non-negative integer");
-        }
-        return false;
-    }
-    return true;
-}
-
 }
 
 NodeApplication::NodeApplication(
@@ -1643,8 +1611,19 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     }
 
     int invokeTimeoutMs = -1;
-    if ( !parseInvokeTimeoutMs(payload, &invokeTimeoutMs, &parseError) )
+    if ( !Common::parseOptionalInt(
+            payload,
+            QStringLiteral("timeoutMs"),
+            0,
+            (std::numeric_limits<int>::max)(),
+            -1,
+            &invokeTimeoutMs,
+            nullptr,
+            Common::IntegerParseStyle::Integer,
+            QStringLiteral("node.invoke")
+        ) )
     {
+        parseError = QStringLiteral("timeoutMs must be non-negative integer");
         qWarning().noquote() << QStringLiteral(
             "[node.invoke] invalid timeout id=%1 command=%2 error=%3"
         ).arg(invokeId, command, parseError);

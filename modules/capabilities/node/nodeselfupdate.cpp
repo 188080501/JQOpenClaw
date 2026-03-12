@@ -286,12 +286,16 @@ bool NodeSelfUpdate::execute(
         }
         return false;
     }
-    QString downloadUrlText = Common::extractStringTrimmed(paramsObject, QStringLiteral("downloadUrl"));
-    if ( downloadUrlText.isEmpty() )
-    {
-        downloadUrlText = Common::extractStringTrimmed(paramsObject, QStringLiteral("url"));
-    }
-    if ( downloadUrlText.isEmpty() )
+    QString downloadUrlText;
+    if ( !Common::parseRequiredTrimmedStringAlias(
+            paramsObject,
+            QStringLiteral("downloadUrl"),
+            QStringLiteral("url"),
+            &downloadUrlText,
+            &parseError,
+            QString(),
+            QStringLiteral("node.selfUpdate requires downloadUrl")
+        ) )
     {
         if ( invalidParams != nullptr )
         {
@@ -299,7 +303,7 @@ bool NodeSelfUpdate::execute(
         }
         if ( error != nullptr )
         {
-            *error = QStringLiteral("node.selfUpdate requires downloadUrl");
+            *error = parseError;
         }
         return false;
     }
@@ -322,7 +326,10 @@ bool NodeSelfUpdate::execute(
         return false;
     }
 
-    const QString expectedMd5 = Common::extractStringTrimmed(paramsObject, QStringLiteral("md5")).toLower();
+    const QString expectedMd5 = Common::extractStringTrimmed(
+        paramsObject,
+        QStringLiteral("md5")
+    ).toLower();
     if ( expectedMd5.isEmpty() )
     {
         if ( invalidParams != nullptr )
