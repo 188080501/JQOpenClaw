@@ -313,7 +313,7 @@ bool parseReadOperation(
 
     if ( error != nullptr )
     {
-        *error = QStringLiteral("operation must be read, lines, list, rg, stat, or md5");
+        *error = QStringLiteral("file.read operation must be one of: read, lines, list, rg, stat, md5");
     }
     return false;
 }

@@ -105,7 +105,7 @@ bool parseWriteOperation(
 
     if ( error != nullptr )
     {
-        *error = QStringLiteral("operation must be write, move/cut, delete/remove, mkdir/createDir, or rmdir/removeDir");
+        *error = QStringLiteral("file.write operation must be one of: write, move/cut, delete/remove, mkdir/createDir, rmdir/removeDir");
     }
     return false;
 }

@@ -375,7 +375,7 @@ bool Common::parseRequiredTrimmedStringAlias(
         if ( error != nullptr )
         {
             const QString message = missingMessage.trimmed().isEmpty()
-                ? QStringLiteral("requires %1").arg(primaryField)
+                ? QStringLiteral("requires %1 or %2").arg(primaryField, aliasField)
                 : missingMessage;
             *error = scopedMessage(scope, message);
         }
@@ -980,55 +980,17 @@ bool Common::parseTimeoutMs(
         }
         return false;
     }
-
-    *timeoutMs = defaultValue;
-    const QJsonValue timeoutValue = paramsObject.value(field);
-    if ( timeoutValue.isUndefined() || timeoutValue.isNull() )
-    {
-        return true;
-    }
-
-    if ( !timeoutValue.isDouble() )
-    {
-        if ( error != nullptr )
-        {
-            *error = scopedMessage(
-                scope,
-                QStringLiteral("%1 must be number").arg(field)
-            );
-        }
-        return false;
-    }
-
-    bool ok = false;
-    const int parsedTimeoutMs = QString::number(timeoutValue.toDouble(), 'g', 16).toInt(&ok);
-    if ( !ok )
-    {
-        if ( error != nullptr )
-        {
-            *error = scopedMessage(
-                scope,
-                QStringLiteral("%1 is invalid").arg(field)
-            );
-        }
-        return false;
-    }
-    if ( ( parsedTimeoutMs < minValue ) ||
-         ( parsedTimeoutMs > maxValue ) )
-    {
-        if ( error != nullptr )
-        {
-            *error = scopedMessage(
-                scope,
-                QStringLiteral("%1 out of range [%2, %3]")
-                    .arg(field, QString::number(minValue), QString::number(maxValue))
-            );
-        }
-        return false;
-    }
-
-    *timeoutMs = parsedTimeoutMs;
-    return true;
+    return parseOptionalInt(
+        paramsObject,
+        field,
+        minValue,
+        maxValue,
+        defaultValue,
+        timeoutMs,
+        error,
+        IntegerParseStyle::Number,
+        scope
+    );
 }
 
 bool Common::parseIntValue(
@@ -1054,19 +1016,24 @@ bool Common::parseIntValue(
         return false;
     }
 
+    const QString expectedType = ( style == IntegerParseStyle::Integer )
+        ? QStringLiteral("integer")
+        : QStringLiteral("number");
+    const QString expectedWithinRange = QStringLiteral("%1 must be %2 within [%3, %4]")
+        .arg(
+            field,
+            expectedType,
+            QString::number(minValue),
+            QString::number(maxValue)
+        );
+
     if ( !rawValue.isDouble() )
     {
         if ( error != nullptr )
         {
             *error = scopedMessage(
                 scope,
-                QStringLiteral("%1 must be %2")
-                    .arg(
-                        field,
-                        ( style == IntegerParseStyle::Integer )
-                            ? QStringLiteral("integer")
-                            : QStringLiteral("number")
-                    )
+                QStringLiteral("%1 must be %2").arg(field, expectedType)
             );
         }
         return false;
@@ -1080,10 +1047,7 @@ bool Common::parseIntValue(
         {
             if ( error != nullptr )
             {
-                *error = scopedMessage(
-                    scope,
-                    QStringLiteral("%1 must be integer").arg(field)
-                );
+                *error = scopedMessage(scope, expectedWithinRange);
             }
             return false;
         }
@@ -1093,10 +1057,7 @@ bool Common::parseIntValue(
         {
             if ( error != nullptr )
             {
-                *error = scopedMessage(
-                    scope,
-                    QStringLiteral("%1 out of range").arg(field)
-                );
+                *error = scopedMessage(scope, expectedWithinRange);
             }
             return false;
         }
@@ -1106,10 +1067,7 @@ bool Common::parseIntValue(
         {
             if ( error != nullptr )
             {
-                *error = scopedMessage(
-                    scope,
-                    QStringLiteral("%1 must be integer").arg(field)
-                );
+                *error = scopedMessage(scope, expectedWithinRange);
             }
             return false;
         }
@@ -1122,10 +1080,7 @@ bool Common::parseIntValue(
         {
             if ( error != nullptr )
             {
-                *error = scopedMessage(
-                    scope,
-                    QStringLiteral("%1 is invalid").arg(field)
-                );
+                *error = scopedMessage(scope, expectedWithinRange);
             }
             return false;
         }
@@ -1136,11 +1091,7 @@ bool Common::parseIntValue(
     {
         if ( error != nullptr )
         {
-            *error = scopedMessage(
-                scope,
-                QStringLiteral("%1 out of range [%2, %3]")
-                    .arg(field, QString::number(minValue), QString::number(maxValue))
-            );
+            *error = scopedMessage(scope, expectedWithinRange);
         }
         return false;
     }
@@ -1240,6 +1191,18 @@ bool Common::parseRequiredInt(
     const QString &scope
 )
 {
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: integer output pointer is null")
+            );
+        }
+        return false;
+    }
+
     const QJsonValue rawValue = paramsObject.value(field);
     if ( rawValue.isUndefined() || rawValue.isNull() )
     {
@@ -1278,13 +1241,18 @@ bool Common::parseInt64Value(
         return false;
     }
 
+    const QString expectedWithinRange = QStringLiteral("%1 must be integer within [%2, %3]")
+        .arg(field)
+        .arg(minValue)
+        .arg(maxValue);
+
     if ( !rawValue.isDouble() )
     {
         if ( error != nullptr )
         {
             *error = scopedMessage(
                 scope,
-                QStringLiteral("%1 must be number").arg(field)
+                QStringLiteral("%1 must be integer").arg(field)
             );
         }
         return false;
@@ -1295,13 +1263,7 @@ bool Common::parseInt64Value(
     {
         if ( error != nullptr )
         {
-            *error = scopedMessage(
-                scope,
-                QStringLiteral("%1 must be integer within [%2, %3]")
-                    .arg(field)
-                    .arg(minValue)
-                    .arg(maxValue)
-            );
+            *error = scopedMessage(scope, expectedWithinRange);
         }
         return false;
     }
@@ -1311,13 +1273,7 @@ bool Common::parseInt64Value(
     {
         if ( error != nullptr )
         {
-            *error = scopedMessage(
-                scope,
-                QStringLiteral("%1 must be integer within [%2, %3]")
-                    .arg(field)
-                    .arg(minValue)
-                    .arg(maxValue)
-            );
+            *error = scopedMessage(scope, expectedWithinRange);
         }
         return false;
     }
@@ -1327,13 +1283,7 @@ bool Common::parseInt64Value(
     {
         if ( error != nullptr )
         {
-            *error = scopedMessage(
-                scope,
-                QStringLiteral("%1 must be integer within [%2, %3]")
-                    .arg(field)
-                    .arg(minValue)
-                    .arg(maxValue)
-            );
+            *error = scopedMessage(scope, expectedWithinRange);
         }
         return false;
     }
@@ -1385,6 +1335,18 @@ bool Common::parseRequiredInt64(
     const QString &scope
 )
 {
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: integer output pointer is null")
+            );
+        }
+        return false;
+    }
+
     const QJsonValue rawValue = paramsObject.value(field);
     if ( rawValue.isUndefined() || rawValue.isNull() )
     {
@@ -1452,6 +1414,18 @@ bool Common::parseRequiredInt64Alias(
     const QString &scope
 )
 {
+    if ( value == nullptr )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: integer output pointer is null")
+            );
+        }
+        return false;
+    }
+
     const QJsonValue primaryValue = paramsObject.value(primaryField);
     if ( !primaryValue.isUndefined() && !primaryValue.isNull() )
     {
@@ -1468,7 +1442,7 @@ bool Common::parseRequiredInt64Alias(
     {
         *error = scopedMessage(
             scope,
-            QStringLiteral("requires %1").arg(primaryField)
+            QStringLiteral("requires %1 or %2").arg(primaryField, aliasField)
         );
     }
     return false;
@@ -1498,11 +1472,11 @@ bool Common::parseOptionalToken(
 
     *token = defaultValue;
     const QJsonValue rawValue = paramsObject.value(field);
-    if ( rawValue.isUndefined() )
+    if ( rawValue.isUndefined() || rawValue.isNull() )
     {
         return true;
     }
-    if ( rawValue.isNull() || !rawValue.isString() )
+    if ( !rawValue.isString() )
     {
         if ( error != nullptr )
         {
@@ -1719,7 +1693,7 @@ bool Common::parseProcessEnvironment(
             {
                 if ( !warningPrefix.isEmpty() )
                 {
-                    qWarning().noquote() << QStringLiteral(
+                    qDebug().noquote() << QStringLiteral(
                         "%1 skip environment key=%2 reason=path_override"
                     ).arg(
                         warningPrefix,
@@ -1733,7 +1707,7 @@ bool Common::parseProcessEnvironment(
             {
                 if ( !warningPrefix.isEmpty() )
                 {
-                    qWarning().noquote() << QStringLiteral(
+                    qDebug().noquote() << QStringLiteral(
                         "%1 skip environment key=%2 reason=unsafe_key"
                     ).arg(
                         warningPrefix,
