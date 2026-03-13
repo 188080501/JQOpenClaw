@@ -18,7 +18,7 @@
 ```
 
 约束：
-- `nodeId`、`command`、`idempotencyKey` 必填。
+- `nodeId`、`command` 必填；`idempotencyKey` 强烈建议传入。
 - `params` 可省略，省略时等价空对象。
 - 每次请求使用新 UUID 作为 `idempotencyKey`。
 - 节点侧接收 `node.invoke.request` 时仅解析 `paramsJSON`，且 `paramsJSON` 必须为对象 JSON。

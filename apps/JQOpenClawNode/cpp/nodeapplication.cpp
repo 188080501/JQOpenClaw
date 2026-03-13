@@ -1617,18 +1617,13 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
         return;
     }
 
-    if ( idempotencyKey.isEmpty() )
+    QString effectiveIdempotencyKey = idempotencyKey;
+    if ( effectiveIdempotencyKey.isEmpty() )
     {
+        effectiveIdempotencyKey = QStringLiteral("missing-idempotency:%1").arg(invokeId);
         qWarning().noquote() << QStringLiteral(
-            "[node.invoke] invalid request id=%1 command=%2 error=missing idempotencyKey"
-        ).arg(invokeId, command);
-        sendInvokeError(
-            invokeId,
-            nodeId,
-            QStringLiteral("INVALID_PARAMS"),
-            QStringLiteral("idempotencyKey is required")
-        );
-        return;
+            "[node.invoke] request missing idempotencyKey id=%1 command=%2 fallbackKey=%3"
+        ).arg(invokeId, command, effectiveIdempotencyKey);
     }
 
     QJsonValue params = QJsonObject();
@@ -1676,7 +1671,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     const QString invokeCacheKey = buildInvokeIdempotencyCacheKey(
         nodeId,
         command,
-        idempotencyKey
+        effectiveIdempotencyKey
     );
     const QString requestFingerprint = buildInvokeRequestFingerprint(
         command,
@@ -1802,7 +1797,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
             );
             qInfo().noquote() << QStringLiteral(
                 "[node.invoke] replayed idempotent result id=%1 command=%2 key=%3"
-            ).arg(invokeId, command, idempotencyKey);
+            ).arg(invokeId, command, effectiveIdempotencyKey);
             pruneInvokeIdempotencyCache(nowMs);
             return;
         }
@@ -1826,7 +1821,7 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 
         qInfo().noquote() << QStringLiteral(
             "[node.invoke] request joined in-flight idempotency id=%1 command=%2 key=%3"
-        ).arg(invokeId, command, idempotencyKey);
+        ).arg(invokeId, command, effectiveIdempotencyKey);
         return;
     }
 
