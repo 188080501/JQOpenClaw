@@ -173,18 +173,15 @@ void GatewayClient::onTextMessageReceived(const QString &message)
         }
         if ( eventName == "node.invoke.request" )
         {
-            const QJsonObject payload = root.value("payload").toObject();
-            const QString invokeId = Common::extractStringRaw(payload, "id").trimmed();
-            const QString nodeId = Common::extractStringRaw(payload, "nodeId").trimmed();
-            const QString command = Common::extractStringRaw(payload, "command").trimmed();
-            if ( invokeId.isEmpty() || nodeId.isEmpty() || command.isEmpty() )
+            const QJsonValue payloadValue = root.value("payload");
+            if ( !payloadValue.isObject() )
             {
                 qWarning().noquote() << QStringLiteral(
-                    "invalid node.invoke.request event: missing id/nodeId/command"
+                    "invalid node.invoke.request event: payload is not object"
                 );
                 return;
             }
-            emit invokeRequestReceived(payload);
+            emit invokeRequestReceived(payloadValue.toObject());
         }
         return;
     }

@@ -104,19 +104,29 @@ bool parseExecuteRequest(
     {
         return false;
     }
-    const QString command = Common::extractStringTrimmed(
-        paramsObject,
-        QStringLiteral("command")
-    );
-    if ( !command.isEmpty() )
+    const QJsonValue commandValue = paramsObject.value(QStringLiteral("command"));
+    if ( !commandValue.isUndefined() && !commandValue.isNull() )
     {
-        if ( error != nullptr )
+        if ( !commandValue.isString() )
         {
-            *error = QStringLiteral(
-                "process.exec command mode is not supported; use program and arguments"
-            );
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral("process.exec command must be string");
+            }
+            return false;
         }
-        return false;
+
+        const QString command = commandValue.toString().trimmed();
+        if ( !command.isEmpty() )
+        {
+            if ( error != nullptr )
+            {
+                *error = QStringLiteral(
+                    "process.exec command mode is not supported; use program and arguments"
+                );
+            }
+            return false;
+        }
     }
 
     arguments->clear();

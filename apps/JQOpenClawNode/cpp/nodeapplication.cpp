@@ -1531,9 +1531,6 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
     const QString invokeId = Common::extractStringTrimmed(payload, QStringLiteral("id"));
     const QString nodeId = Common::extractStringTrimmed(payload, QStringLiteral("nodeId"));
     const QString command = Common::extractStringTrimmed(payload, QStringLiteral("command"));
-    const QString invokeTime = QDateTime::currentDateTime()
-        .toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
-    appendInvokeHistoryEntry(invokeTime, command);
     const QString idempotencyKey = Common::extractStringTrimmed(payload, QStringLiteral("idempotencyKey"));
     const QJsonValue paramsJsonValue = payload.value(QStringLiteral("paramsJSON"));
     const QString paramsJson = paramsJsonValue.isString()
@@ -1546,11 +1543,51 @@ void NodeApplication::onInvokeRequestReceived(const QJsonObject &payload)
 
     if ( invokeId.isEmpty() || nodeId.isEmpty() || command.isEmpty() )
     {
+        QStringList missingFields;
+        if ( invokeId.isEmpty() )
+        {
+            missingFields.append(QStringLiteral("id"));
+        }
+        if ( nodeId.isEmpty() )
+        {
+            missingFields.append(QStringLiteral("nodeId"));
+        }
+        if ( command.isEmpty() )
+        {
+            missingFields.append(QStringLiteral("command"));
+        }
+        const QString message = QStringLiteral("missing required fields: %1")
+            .arg(missingFields.join(QStringLiteral(", ")));
         qWarning().noquote() << QStringLiteral(
-            "[node.invoke] request ignored: missing id/nodeId/command"
-        );
+            "[node.invoke] invalid request id=%1 command=%2 error=%3"
+        ).arg(invokeId, command, message);
+
+        if ( !invokeId.isEmpty() )
+        {
+            QString responseNodeId = nodeId;
+            if ( responseNodeId.isEmpty() )
+            {
+                responseNodeId = identity_.deviceId.trimmed();
+            }
+            sendInvokeError(
+                invokeId,
+                responseNodeId,
+                QStringLiteral("INVALID_PARAMS"),
+                message
+            );
+        }
+        else
+        {
+            qWarning().noquote() << QStringLiteral(
+                "[node.invoke] request ignored: missing id, cannot send invoke result"
+            );
+        }
         return;
     }
+
+    const QString invokeTime = QDateTime::currentDateTime()
+        .toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    appendInvokeHistoryEntry(invokeTime, command);
 
     const QString localDeviceId = identity_.deviceId.trimmed();
     if ( localDeviceId.isEmpty() )

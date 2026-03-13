@@ -1241,10 +1241,28 @@ bool Common::parseInt64Value(
         return false;
     }
 
+    // JSON numbers are IEEE-754 doubles; integers outside safe range can be rounded silently.
+    const qint64 safeIntegerMin = -9007199254740991LL;
+    const qint64 safeIntegerMax = 9007199254740991LL;
+    const qint64 effectiveMin = ( minValue > safeIntegerMin ) ? minValue : safeIntegerMin;
+    const qint64 effectiveMax = ( maxValue < safeIntegerMax ) ? maxValue : safeIntegerMax;
+
+    if ( effectiveMin > effectiveMax )
+    {
+        if ( error != nullptr )
+        {
+            *error = scopedMessage(
+                scope,
+                QStringLiteral("internal error: %1 integer range is invalid").arg(field)
+            );
+        }
+        return false;
+    }
+
     const QString expectedWithinRange = QStringLiteral("%1 must be integer within [%2, %3]")
         .arg(field)
-        .arg(minValue)
-        .arg(maxValue);
+        .arg(effectiveMin)
+        .arg(effectiveMax);
 
     if ( !rawValue.isDouble() )
     {
@@ -1268,8 +1286,8 @@ bool Common::parseInt64Value(
         return false;
     }
 
-    if ( ( doubleValue < static_cast<double>(minValue) ) ||
-         ( doubleValue > static_cast<double>(maxValue) ) )
+    if ( ( doubleValue < static_cast<double>(effectiveMin) ) ||
+         ( doubleValue > static_cast<double>(effectiveMax) ) )
     {
         if ( error != nullptr )
         {
