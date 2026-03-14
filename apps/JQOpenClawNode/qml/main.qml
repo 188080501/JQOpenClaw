@@ -15,7 +15,6 @@ JQWindow {
     color: "#f5f6f8"
 
     Component.onCompleted: {
-        JQGlobal.window = window;
         startupOpacityAnimation.start();
     }
 
