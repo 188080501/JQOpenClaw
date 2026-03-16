@@ -1,4 +1,4 @@
 TEMPLATE = subdirs
 CONFIG += ordered
 
-SUBDIRS += apps/apps.pro
+SUBDIRS += apps/JQOpenClawNode/JQOpenClawNode.pro
